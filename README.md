@@ -20,7 +20,7 @@ Il progetto funge da esercizio pratico di ingegneria del software, con un focus 
 | Componente | Specifiche |
 | :--- | :--- |
 | **Linguaggio** | Il codice verrà scritto interamente in **Python**. |
-| **Interfaccia Grafica** | Per l'implementazione del Front-End (sezione opzionale del progetto) verrà utilizzato **Qt**. |
+| **Interfaccia Grafica** | Per l'implementazione del Front-End (sezione opzionale del progetto) verrà utilizzato **Tkinter**. |
 | **Quality Assurance** | Verranno effettuati **Unit-Tests** per validare la correttezza algoritmica. |
 | **Code Style** | Verrà utilizzato l'auto-formatter **Black** (fortemente raccomandato) per mantenere l'uniformità del codice. |
 | **Standard Commit** | Verranno utilizzati i **Conventional Commits** per una cronologia Git chiara. |
