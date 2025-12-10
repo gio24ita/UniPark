@@ -3,7 +3,7 @@
 ## Introduzione
 **UniPark** è un software dimostrativo (Demo) sviluppato per simulare la gestione in tempo reale dei parcheggi della Cittadella Universitaria (Zone: Viale A. Doria, DMI, Via S. Sofia).
 
-Il progetto funge da esercizio pratico di ingegneria del software, con un focus didattico e algoritmico: dimostra la gestione delle risorse (posti auto) e delle code d'attesa in un ambiente simulato, utilizzando esclusivamente strutture dati in memoria di Python.
+Il progetto ha un focus didattico e algoritmico: dimostra la gestione delle risorse (posti auto) e delle code d'attesa in un ambiente simulato, utilizzando esclusivamente strutture dati in memoria di Python.
 
 ## Scopo e Funzionalità
 
