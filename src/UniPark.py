@@ -5,7 +5,7 @@ import time
 
 ### 1. CONFIGURAZIONE DEL SISTEMA ###
 # Questo blocco serve a garantire che i colori e i movimenti del cursore
-# funzionino anche su Windows. Windows (specialmente cmd.exe vecchi) 
+# funzionino anche su Windows. Windows (specialmente cmd.exe vecchi)
 # non supporta nativamente i codici ANSI senza questa "spinta".
 if os.name == "nt":
     os.system("")  # Esegue un comando vuoto che abilita la modalità VT100 su Windows
@@ -30,7 +30,7 @@ class ParkingZone:
 
         # IL LOCK (LUCCHETTO):
         # È fondamentale nel multithreading. Immaginalo come la chiave del bagno.
-        # Solo chi ha la chiave (thread automatico o utente) può entrare, 
+        # Solo chi ha la chiave (thread automatico o utente) può entrare,
         # modificare i posti e poi uscire restituendo la chiave.
         self.lock = threading.Lock()
 
@@ -72,7 +72,7 @@ c = ParkingZone("Zona C", 80, random.randint(1, 80))
 # senza disturbare quello che l'utente sta scrivendo.
 def update_header_only():
     """Aggiorna solo la riga in alto."""
-    
+
     # Prepariamo il testo. :02d significa "formatta il numero con almeno 2 cifre" (es. 05)
     status_text = (
         f"--- STATO LIVE: A:{a.free_slots:02d} | "
@@ -88,7 +88,7 @@ def update_header_only():
     # \033[u    -> RIPRISTINA il cursore dove l'avevamo salvato
     print(
         f"\033[s\033[1;1H\033[2K\033[1;36m{status_text}\033[0m\033[u",
-        end="",      # end="" evita di andare a capo automaticamente
+        end="",  # end="" evita di andare a capo automaticamente
         flush=True,  # flush=True forza la stampa immediata (essenziale con sleep)
     )
 
@@ -98,27 +98,27 @@ def update_header_only():
 # e lancia il comando giusto per pulire tutto il terminale all'inizio.
 def clear_screen():
     if os.name == "nt":
-        os.system("cls") #Windows
+        os.system("cls")  # Windows
     else:
-        os.system("clear") #Linux
+        os.system("clear")  # Linux
 
 
 ### 6. IL THREAD AUTOMATICO (Il "Motore" nascosto) ###
 # Questa funzione girerà in parallelo al programma principale.
 # Simula la vita reale: auto che arrivano e partono da sole.
-def flusso_automatico(): #DA RIVEDERE
+def flusso_automatico():  # DA RIVEDERE
     zone = [a, b, c]
     while True:
         # Aspetta un tempo casuale tra 0.5 e 2 secondi
         time.sleep(random.uniform(0.5, 2.0))
-        
+
         for single_zone in zone:
             # Tira una moneta (o quasi): genera un numero da 0 a 100
             evento = random.randint(0, 100)
-            
-            if evento < 40:             # 40% di probabilità di parcheggiare
+
+            if evento < 40:  # 40% di probabilità di parcheggiare
                 single_zone.park()
-            elif 40 <= evento < 60:     # 20% di probabilità di uscire
+            elif 40 <= evento < 60:  # 20% di probabilità di uscire
                 single_zone.unpark()
 
         # Importante: dopo che il computer ha mosso le auto, aggiorna la grafica
@@ -136,23 +136,23 @@ simulazione_thread = threading.Thread(target=flusso_automatico)
 # daemon = True significa: "Se l'utente chiude il programma principale,
 # tu (thread) devi morire subito, non restare attivo in background".
 simulazione_thread.daemon = True
-simulazione_thread.start() # Via!
+simulazione_thread.start()  # Via!
 
 
 ### 8. LOOP PRINCIPALE (Interazione Utente) ###
 # Questa parte gestisce l'input della tastiera.
 # Deve essere robusta contro errori di digitazione.
-mappa_zone = {"a": a, "b": b, "c": c} # Collega la lettera "a" all'oggetto a
+mappa_zone = {"a": a, "b": b, "c": c}  # Collega la lettera "a" all'oggetto a
 
 while True:
     try:
         # Chiediamo l'input. .strip() toglie spazi vuoti, .lower() rende tutto minuscolo
         comando_input = input("Inserisci comando: ").strip().lower()
     except EOFError:
-        break # Se premo Ctrl+D esce
+        break  # Se premo Ctrl+D esce
 
     if not comando_input:
-        continue # Se premo invio a vuoto, ricomincia
+        continue  # Se premo invio a vuoto, ricomincia
 
     # PULIZIA VISIVA INPUT:
     # Appena premi invio, questa riga cancella quello che hai scritto
@@ -163,14 +163,16 @@ while True:
     if comando_input == "exit":
         break
 
-    parti = comando_input.split() # Divide la frase in parole
+    parti = comando_input.split()  # Divide la frase in parole
 
     # Controllo se ho scritto due parole (es. "park" e "a")
     if len(parti) != 2:
         # \r riporta il cursore a inizio riga per sovrascrivere
-        print("\r⚠️  Formato errato! Usa: 'azione zona' (es. park a)", end="", flush=True)
+        print(
+            "\r⚠️  Formato errato! Usa: 'azione zona' (es. park a)", end="", flush=True
+        )
         time.sleep(0.5)
-        print("\r\033[K", end="", flush=True) # Cancella l'errore dopo 0.5s
+        print("\r\033[K", end="", flush=True)  # Cancella l'errore dopo 0.5s
         continue
 
     azione, nome_zona = parti[0], parti[1]
@@ -180,14 +182,14 @@ while True:
         zona = mappa_zone[nome_zona]
 
         if azione == "park":
-            esito = zona.park() # Proviamo a parcheggiare
+            esito = zona.park()  # Proviamo a parcheggiare
             if esito:
                 print(f"\r✅ Comando: PARK su {zona.name}", end="", flush=True)
             else:
                 print(f"\r❌ Parcheggio PIENO su {zona.name}!", end="", flush=True)
 
-            time.sleep(0.5)               # Lascia leggere il messaggio
-            print("\r\033[K", end="", flush=True) # Pulisce la riga
+            time.sleep(0.5)  # Lascia leggere il messaggio
+            print("\r\033[K", end="", flush=True)  # Pulisce la riga
 
         elif azione == "unpark":
             esito = zona.unpark()
