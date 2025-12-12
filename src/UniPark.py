@@ -166,4 +166,3 @@ while True:
         print(f"\r❌ Zona '{nome_zona}' inesistente!", end="", flush=True)
         time.sleep(0.5)
         print("\r\033[K", end="", flush=True)
-        
