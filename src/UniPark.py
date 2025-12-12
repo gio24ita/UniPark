@@ -34,14 +34,10 @@ class ZonaB(ParkingZone): pass
 
 class ZonaC(ParkingZone): pass
 
-
-#class ZonaD(ParkingZone): pass
-
-
 # --- ISTANZE GLOBALI (CONDIVISE) ---
-a = ZonaA("Zona A", 10, random.randint(1,10))
-b = ZonaB("Zona B", 10, random.randint(1,10))
-c = ZonaC("Zona C", 10, random.randint(1,10))
+a = ZonaA("Zona A", 60, random.randint(1,60))
+b = ZonaB("Zona B", 45, random.randint(1,45))
+c = ZonaC("Zona C", 80, random.randint(1,80))
 #d = ZonaD("Zona D", 10, random.randint(1,10))
 
 
@@ -114,12 +110,7 @@ mappa_zone = {
     "b": b,
     "c": c,
 }
-'''mappa_zone = {
-    "a": a,
-    "b": b,
-    "c": c,
-    "d": d
-}'''
+
 while True:
     # Esempio input utente: "park a" o "unpark b"
     comando_input = input("Inserisci comando (es. 'park a'): ").strip().lower()
