@@ -1,0 +1,1 @@
+implementare un thread per ogni zona, in modo che la simulazione sia più realistica
