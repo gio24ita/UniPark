@@ -1,7 +1,7 @@
-import random
-import time
-import threading
 import os
+import random
+import threading
+import time
 
 # --- CONFIGURAZIONE ANSI PER WINDOWS ---
 if os.name == "nt":
