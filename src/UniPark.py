@@ -2,6 +2,7 @@ import random
 import time
 import threading  # <--- IMPORTA QUESTO
 import os
+from threading import Lock
 
 # --- TUE CLASSI ---
 class ParkingZone:
@@ -44,10 +45,13 @@ b = ZonaB("Zona B", 10, random.randint(1,10))
 c = ZonaC("Zona C", 10, random.randint(1,10))
 #d = ZonaD("Zona D", 10, random.randint(1,10))
 
+# --- LOCK PER SINCRONIZZAZIONE TRA THREAD ---
+zone_lock = Lock()
+
 
 def print_status():
-#    print(f"\n--- STATO LIVE: A:{a.free_slots} | B:{b.free_slots} | C:{c.free_slots} |  D:{d.free_slots} ---")
-    print(f"\n--- STATO LIVE: A:{a.free_slots} | B:{b.free_slots} | C:{c.free_slots} ---")
+    with zone_lock:
+        print(f"\n--- STATO LIVE: A:{a.free_slots} | B:{b.free_slots} | C:{c.free_slots} ---")
 
 def clear_screen():
     # Controlla se il sistema è Windows ('nt') o Unix/Linux/Mac
@@ -69,14 +73,15 @@ def flusso_automatico():
         time.sleep(attesa)
 
         # 2. LOGICA: Le auto si muovono
-        for zona in zone:
-            evento = random.randint(0, 100)
-            if evento < 40:
-                zona.park()
-            elif 40 <= evento < 60:
-                zona.unpark()
-            else:
-                pass
+        with zone_lock:
+            for zona in zone:
+                evento = random.randint(0, 100)
+                if evento < 40:
+                    zona.park()
+                elif 40 <= evento < 60:
+                    zona.unpark()
+                else:
+                    pass
 
         # 3. PULIZIA E AGGIORNAMENTO (MIGLIORATE)
         clear_screen()
@@ -166,7 +171,7 @@ while True:
                 print("⚠️ Azione non riconosciuta. Usa 'park' o 'unpark'.")
 
         else:
-            print(f"⚠️ Zona '{nome_zona}' non trovata. Zone valide: a, b, c, d.")
+            print(f"⚠️ Zona '{nome_zona}' non trovata. Zone valide: a, b, c.")
 
     except Exception as e:
         print(f"Errore: {e}")
