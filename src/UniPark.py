@@ -3,12 +3,13 @@ import time
 import threading
 import os
 
+
 # Classe Parcheggio
 class ParkingZone:
     def __init__(self, name, capacity, free_slots):
         self.name = name
         self.capacity = capacity
-        
+
         # se per errore arrivano dati strani (es. più auto che posti), li correggiamo subito
         if free_slots > capacity:
             self.free_slots = capacity
@@ -28,14 +29,13 @@ class ParkingZone:
         va a finire che parcheggimao con il contatore a -1
         """
 
-
     def park(self):
         """
         funzione per il parcheggio dell'auto
         usiamo il lock per evitare conflitti tra utente e computer.
         ritorniamo True se parcheggiamo, False se è pieno.
         """
-        with self.lock: # aspetta che la chiave si libera, poi entra e chiudi la chiave
+        with self.lock:  # aspetta che la chiave si libera, poi entra e chiudi la chiave
             if self.free_slots > 0:
                 self.free_slots -= 1
                 return True
@@ -48,21 +48,23 @@ class ParkingZone:
         funzione per l'uscita dal parcheggio
         ritorniamo True se usciamo, False se era già vuoto.
         """
-        with self.lock: #<-- impostiamo il solito lock
+        with self.lock:  # <-- impostiamo il solito lock
             if self.free_slots < self.capacity:
                 self.free_slots += 1
                 return True
             else:
                 return False
-            
+
     def get_status(self):
-        """ funzione che restituisce una stringa con lo stato attuale (utile per i print) """
+        """funzione che restituisce una stringa con lo stato attuale (utile per i print)"""
         with self.lock:
             return f"{self.free_slots}/{self.capacity}"
 
     def __str__(self):
-        """ funzione che permette di fare print(zona) e vedere un testo clean """
+        """funzione che permette di fare print(zona) e vedere un testo clean"""
         return f"[{self.name}] Posti liberi: {self.get_status()}"
+
+
 # FINE CLASSE PARCHEGGIO
 
 
@@ -71,22 +73,27 @@ a = ParkingZone("Zona A", 60, random.randint(1, 60))
 b = ParkingZone("Zona B", 45, random.randint(1, 45))
 c = ParkingZone("Zona C", 80, random.randint(1, 80))
 
+
 def print_status():
-#    print(f"\n--- STATO LIVE: A:{a.free_slots} | B:{b.free_slots} | C:{c.free_slots} |  D:{d.free_slots} ---")
-    print(f"\n--- STATO LIVE: A:{a.free_slots} | B:{b.free_slots} | C:{c.free_slots} ---")
+    #    print(f"\n--- STATO LIVE: A:{a.free_slots} | B:{b.free_slots} | C:{c.free_slots} |  D:{d.free_slots} ---")
+    print(
+        f"\n--- STATO LIVE: A:{a.free_slots} | B:{b.free_slots} | C:{c.free_slots} ---"
+    )
+
 
 def clear_screen():
     # Controlla se il sistema è Windows ('nt') o Unix/Linux/Mac
-    if os.name == 'nt':
-        os.system('cls')
+    if os.name == "nt":
+        os.system("cls")
     else:
-        os.system('clear')
+        os.system("clear")
+
 
 # --- 1. FUNZIONE PER IL FLUSSO AUTOMATICO (BACKGROUND) ---
 def flusso_automatico():
     """Simulazione realistica con eventi indipendenti e tempi variabili"""
 
-    #zone = [a, b, c, d]
+    # zone = [a, b, c, d]
     zone = [a, b, c]
 
     while True:
@@ -110,14 +117,16 @@ def flusso_automatico():
 
         # IMPORTANTE: Ristampiamo questo avviso perché clear_screen()
         # cancella la richiesta di input dell'utente.
-        print("\n[Simulazione attiva] Inserisci comando (es. 'park a') e premi Invio: ", end="", flush=True)
-
+        print(
+            "\n[Simulazione attiva] Inserisci comando (es. 'park a') e premi Invio: ",
+            end="",
+            flush=True,
+        )
 
 
 # --- 2. CONFIGURAZIONE DEL THREAD ---
 # Creiamo il thread che eseguirà la funzione 'flusso_automatico'
 simulazione_thread = threading.Thread(target=flusso_automatico)
-
 
 
 # 'daemon=True' significa che se chiudi il programma principale,
@@ -164,7 +173,9 @@ while True:
 
         # --- 3. VERIFICA SE LA ZONA ESISTE ---
         if nome_zona in mappa_zone:
-            zona_selezionata = mappa_zone[nome_zona]  # Prende l'oggetto reale (a, b, c o d)
+            zona_selezionata = mappa_zone[
+                nome_zona
+            ]  # Prende l'oggetto reale (a, b, c o d)
 
             # --- 4. ESEGUE L'AZIONE ---
             if azione == "park":
