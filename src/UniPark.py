@@ -2,15 +2,18 @@ import random
 import time
 import threading
 import os
+import sys
 
+# --- CONFIGURAZIONE ANSI PER WINDOWS ---
+if os.name == "nt":
+    os.system("")
 
-# Classe Parcheggio
+# --- CLASSE PARCHEGGIO ---
 class ParkingZone:
     def __init__(self, name, capacity, free_slots):
         self.name = name
         self.capacity = capacity
-
-        # se per errore arrivano dati strani (es. più auto che posti), li correggiamo subito
+        
         if free_slots > capacity:
             self.free_slots = capacity
         elif free_slots < 0:
@@ -18,187 +21,143 @@ class ParkingZone:
         else:
             self.free_slots = free_slots
 
-        # IL LOCK (LA CHIAVE DI SICUREZZA), Creiamo un lucchetto specifico per QUESTA zona.
-        # Così ogni zona avrà la sua key
         self.lock = threading.Lock()
-        """
-        serve a evitare il Race Condition
-        immaginalo come un semaforo rosso/verde
-        serve a evitare che tu e il simulatore/altro utente parcheggiate allo stesos momento
-        e nello stesso parcheggio con 1 solo posto libero
-        va a finire che parcheggimao con il contatore a -1
-        """
 
     def park(self):
-        """
-        funzione per il parcheggio dell'auto
-        usiamo il lock per evitare conflitti tra utente e computer.
-        ritorniamo True se parcheggiamo, False se è pieno.
-        """
-        with self.lock:  # aspetta che la chiave si libera, poi entra e chiudi la chiave
+        with self.lock:
             if self.free_slots > 0:
                 self.free_slots -= 1
                 return True
-            else:
-                return False
-        # appena esci dal "with", la chiave è free
+            
+            # Pylint fix: rimosso else inutile
+            return False
 
     def unpark(self):
-        """
-        funzione per l'uscita dal parcheggio
-        ritorniamo True se usciamo, False se era già vuoto.
-        """
-        with self.lock:  # <-- impostiamo il solito lock
+        with self.lock:
             if self.free_slots < self.capacity:
                 self.free_slots += 1
                 return True
-            else:
-                return False
+            
+            # Pylint fix: rimosso else inutile
+            return False
 
     def get_status(self):
-        """funzione che restituisce una stringa con lo stato attuale (utile per i print)"""
         with self.lock:
             return f"{self.free_slots}/{self.capacity}"
 
-    def __str__(self):
-        """funzione che permette di fare print(zona) e vedere un testo clean"""
-        return f"[{self.name}] Posti liberi: {self.get_status()}"
-
-
-# FINE CLASSE PARCHEGGIO
-
-
-# Creazione aree parcheggio
+# --- ISTANZE GLOBALI ---
 a = ParkingZone("Zona A", 60, random.randint(1, 60))
 b = ParkingZone("Zona B", 45, random.randint(1, 45))
 c = ParkingZone("Zona C", 80, random.randint(1, 80))
 
+# --- GESTIONE GRAFICA CORRETTA ---
+def update_header_only():
+    """Aggiorna solo la riga in alto."""
+    # 1. Calcoliamo la stringa
+    status_text = f"--- STATO LIVE: A:{a.free_slots:02d} | B:{b.free_slots:02d} | C:{c.free_slots:02d} ---"
 
-def print_status():
-    #    print(f"\n--- STATO LIVE: A:{a.free_slots} | B:{b.free_slots} | C:{c.free_slots} |  D:{d.free_slots} ---")
+    # 2. Stampiamo la stringa usando i codici ANSI
     print(
-        f"\n--- STATO LIVE: A:{a.free_slots} | B:{b.free_slots} | C:{c.free_slots} ---"
+        f"\033[s"       # ANSI: Salva la posizione attuale del cursore
+        f"\033[1;1H"    # ANSI: Sposta il cursore alla Riga 1, Colonna 1
+        f"\033[2K"      # ANSI: Cancella la riga corrente
+        f"\033[1;36m"   # ANSI: Colore Ciano
+        f"{status_text}"# Testo
+        f"\033[0m"      # ANSI: Reset colore
+        f"\033[u",      # ANSI: Ripristina il cursore dov'era
+        end="",
+        flush=True,
     )
 
-
 def clear_screen():
-    # Controlla se il sistema è Windows ('nt') o Unix/Linux/Mac
     if os.name == "nt":
         os.system("cls")
     else:
         os.system("clear")
 
 
-# --- 1. FUNZIONE PER IL FLUSSO AUTOMATICO (BACKGROUND) ---
+# --- THREAD AUTOMATICO ---
 def flusso_automatico():
-    """Simulazione realistica con eventi indipendenti e tempi variabili"""
-
-    # zone = [a, b, c, d]
     zone = [a, b, c]
-
     while True:
-        # 1. Attesa variabile
-        attesa = random.uniform(2.0, 6.0)
-        time.sleep(attesa)
-
-        # 2. LOGICA: Le auto si muovono
+        time.sleep(random.uniform(0.5, 2.0))
         for zona in zone:
             evento = random.randint(0, 100)
             if evento < 40:
                 zona.park()
             elif 40 <= evento < 60:
                 zona.unpark()
-            else:
-                pass
+        
+        update_header_only()
 
-        # 3. PULIZIA E AGGIORNAMENTO (MIGLIORATE)
-        clear_screen()
-        print_status()
+# --- AVVIO PROGRAMMA ---
+clear_screen()
+print("\n") # Spazio per header
+print("Simulazione avviata. Scrivi i comandi sotto (es. 'park a').\n")
 
-        # IMPORTANTE: Ristampiamo questo avviso perché clear_screen()
-        # cancella la richiesta di input dell'utente.
-        print(
-            "\n[Simulazione attiva] Inserisci comando (es. 'park a') e premi Invio: ",
-            end="",
-            flush=True,
-        )
-
-
-# --- 2. CONFIGURAZIONE DEL THREAD ---
-# Creiamo il thread che eseguirà la funzione 'flusso_automatico'
 simulazione_thread = threading.Thread(target=flusso_automatico)
-
-
-# 'daemon=True' significa che se chiudi il programma principale,
-# anche questo thread muore automaticamente.
 simulazione_thread.daemon = True
-
-# Avviamo il thread
 simulazione_thread.start()
 
-# --- 3. CODICE PRINCIPALE (INTERAZIONE UTENTE) ---
-# Da qui in poi, il codice viene eseguito IN PARALLELO al while di sopra
-
-print("Simulazione avviata in background! Tu puoi digitare comandi.")
-print("Comandi disponibili: 'park |NOME ZONA|', 'unpark |NOME ZONA|', 'exit'...")
-
-# --- 1. CREA UNA MAPPA (DIZIONARIO) ---
-# Questo serve al computer per capire che se scrivo "a", intendo l'oggetto 'a'
-mappa_zone = {
-    "a": a,
-    "b": b,
-    "c": c,
-}
+# --- LOOP UTENTE ---
+mappa_zone = {"a": a, "b": b, "c": c}
 
 while True:
-    # Esempio input utente: "park a" o "unpark b"
-    comando_input = input("Inserisci comando (es. 'park a'): ").strip().lower()
-
-    if comando_input == "exit":
-        print("Chiusura simulazione...")
+    try:
+        comando_input = input("Inserisci comando: ").strip().lower()
+    except EOFError:
         break
 
-    # --- 2. DIVIDI LA FRASE IN PAROLE ---
-    try:
-        # split() trasforma "park a" in ['park', 'a']
-        parti = comando_input.split()
+    if not comando_input:
+        continue
 
-        # Se l'utente ha scritto meno di 2 parole (es. solo "park"), saltiamo il giro
-        if len(parti) != 2:
-            print("⚠️ Formato errato. Usa: azione zona (es. 'park a')")
-            continue
+    # Pulisci la riga dell'input utente
+    print("\033[A\033[K", end="", flush=True)
 
-        azione = parti[0]  # es. "park"
-        nome_zona = parti[1]  # es. "a"
+    if comando_input == "exit":
+        break
 
-        # --- 3. VERIFICA SE LA ZONA ESISTE ---
-        if nome_zona in mappa_zone:
-            zona_selezionata = mappa_zone[
-                nome_zona
-            ]  # Prende l'oggetto reale (a, b, c o d)
+    parti = comando_input.split()
 
-            # --- 4. ESEGUE L'AZIONE ---
-            if azione == "park":
-                print(f"--> Utente sta parcheggiando in {nome_zona.upper()}...")
-                zona_selezionata.park()  # Chiama il metodo sull'oggetto giusto
+    if len(parti) != 2:
+        print("\r⚠️  Formato errato! Usa: 'azione zona' (es. park a)", end="", flush=True)
+        time.sleep(0.5)
+        print("\r\033[K", end="", flush=True)
+        continue
 
-                # Pulisci e aggiorna
-                clear_screen()
-                print_status()
+    azione, nome_zona = parti[0], parti[1]
 
-            elif azione == "unpark":
-                print(f"--> Utente sta uscendo da {nome_zona.upper()}...")
-                zona_selezionata.unpark()
-
-                # Pulisci e aggiorna #DA MIGLIORARE (PROVATELO E GUARDATE COME SI COMPORTA)
-                clear_screen()
-                print_status()
-
+    if nome_zona in mappa_zone:
+        zona = mappa_zone[nome_zona]
+        
+        if azione == "park":
+            esito = zona.park() # Ora catturiamo il True/False che ritorna la tua classe
+            if esito:
+                print(f"\r✅ Comando: PARK su {zona.name}", end="", flush=True)
             else:
-                print("⚠️ Azione non riconosciuta. Usa 'park' o 'unpark'.")
+                print(f"\r❌ Parcheggio PIENO su {zona.name}!", end="", flush=True)
+            
+            time.sleep(0.5)
+            print("\r\033[K", end="", flush=True)
+            
+        elif azione == "unpark":
+            esito = zona.unpark()
+            if esito:
+                print(f"\r✅ Comando: UNPARK su {zona.name}", end="", flush=True)
+            else:
+                print(f"\r❌ Parcheggio già VUOTO su {zona.name}!", end="", flush=True)
 
+            time.sleep(0.5)
+            print("\r\033[K", end="", flush=True)
+            
         else:
-            print(f"⚠️ Zona '{nome_zona}' non trovata. Zone valide: a, b, c, d.")
+            print(f"\r❌ Azione '{azione}' non valida!", end="", flush=True)
+            time.sleep(0.5)
+            print("\r\033[K", end="", flush=True)
 
-    except Exception as e:
-        print(f"Errore: {e}")
+        update_header_only()
+
+    else:
+        print(f"\r❌ Zona '{nome_zona}' inesistente!", end="", flush=True)
+        time.sleep(0.5)
+        print("\r\033[K", end="", flush=True)
