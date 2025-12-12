@@ -1,45 +1,75 @@
 import random
 import time
-import threading  # <--- IMPORTA QUESTO
+import threading
 import os
 
-# --- TUE CLASSI ---
+# Classe Parcheggio
 class ParkingZone:
     def __init__(self, name, capacity, free_slots):
         self.name = name
         self.capacity = capacity
-        self.free_slots = free_slots
+        
+        # se per errore arrivano dati strani (es. più auto che posti), li correggiamo subito
+        if free_slots > capacity:
+            self.free_slots = capacity
+        elif free_slots < 0:
+            self.free_slots = 0
+        else:
+            self.free_slots = free_slots
+
+        # IL LOCK (LA CHIAVE DI SICUREZZA), Creiamo un lucchetto specifico per QUESTA zona.
+        # Così ogni zona avrà la sua key
+        self.lock = threading.Lock()
+        """
+        serve a evitare il Race Condition
+        immaginalo come un semaforo rosso/verde
+        serve a evitare che tu e il simulatore/altro utente parcheggiate allo stesos momento
+        e nello stesso parcheggio con 1 solo posto libero
+        va a finire che parcheggimao con il contatore a -1
+        """
+
 
     def park(self):
-        if self.free_slots == 0:
-            print(f"\n[AUTO] No free slots on {self.name}")
-        else:
-            self.free_slots -= 1
-            # print ridotto per non sporcare troppo la console
-            # print(f"[AUTO] Parked on {self.name}")
+        """
+        funzione per il parcheggio dell'auto
+        usiamo il lock per evitare conflitti tra utente e computer.
+        ritorniamo True se parcheggiamo, False se è pieno.
+        """
+        with self.lock: # aspetta che la chiave si libera, poi entra e chiudi la chiave
+            if self.free_slots > 0:
+                self.free_slots -= 1
+                return True
+            else:
+                return False
+        # appena esci dal "with", la chiave è free
 
     def unpark(self):
-        if self.free_slots == self.capacity:
-            pass  # Non stampiamo nulla se è vuoto per pulizia
-        else:
-            self.free_slots += 1
-            # print(f"[AUTO] Unparked on {self.name}")
+        """
+        funzione per l'uscita dal parcheggio
+        ritorniamo True se usciamo, False se era già vuoto.
+        """
+        with self.lock: #<-- impostiamo il solito lock
+            if self.free_slots < self.capacity:
+                self.free_slots += 1
+                return True
+            else:
+                return False
+            
+    def get_status(self):
+        """ funzione che restituisce una stringa con lo stato attuale (utile per i print) """
+        with self.lock:
+            return f"{self.free_slots}/{self.capacity}"
+
+    def __str__(self):
+        """ funzione che permette di fare print(zona) e vedere un testo clean """
+        return f"[{self.name}] Posti liberi: {self.get_status()}"
+# FINE CLASSE PARCHEGGIO
 
 
-class ZonaA(ParkingZone): pass
-
-
-class ZonaB(ParkingZone): pass
-
-
-class ZonaC(ParkingZone): pass
-
-# --- ISTANZE GLOBALI (CONDIVISE) ---
-a = ZonaA("Zona A", 60, random.randint(1,60))
-b = ZonaB("Zona B", 45, random.randint(1,45))
-c = ZonaC("Zona C", 80, random.randint(1,80))
-#d = ZonaD("Zona D", 10, random.randint(1,10))
-
+# Creazione aree parcheggio
+a = ParkingZone("Zona A", 60, random.randint(1, 60))
+b = ParkingZone("Zona B", 45, random.randint(1, 45))
+c = ParkingZone("Zona C", 80, random.randint(1, 80))
 
 def print_status():
 #    print(f"\n--- STATO LIVE: A:{a.free_slots} | B:{b.free_slots} | C:{c.free_slots} |  D:{d.free_slots} ---")
