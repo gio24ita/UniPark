@@ -2,7 +2,6 @@ import random
 import time
 import threading
 import os
-import sys
 
 # --- CONFIGURAZIONE ANSI PER WINDOWS ---
 if os.name == "nt":
@@ -13,7 +12,7 @@ class ParkingZone:
     def __init__(self, name, capacity, free_slots):
         self.name = name
         self.capacity = capacity
-        
+
         if free_slots > capacity:
             self.free_slots = capacity
         elif free_slots < 0:
@@ -28,7 +27,7 @@ class ParkingZone:
             if self.free_slots > 0:
                 self.free_slots -= 1
                 return True
-            
+
             # Pylint fix: rimosso else inutile
             return False
 
@@ -37,7 +36,7 @@ class ParkingZone:
             if self.free_slots < self.capacity:
                 self.free_slots += 1
                 return True
-            
+
             # Pylint fix: rimosso else inutile
             return False
 
@@ -54,7 +53,11 @@ c = ParkingZone("Zona C", 80, random.randint(1, 80))
 def update_header_only():
     """Aggiorna solo la riga in alto."""
     # 1. Calcoliamo la stringa
-    status_text = f"--- STATO LIVE: A:{a.free_slots:02d} | B:{b.free_slots:02d} | C:{c.free_slots:02d} ---"
+    # Nota: spezziamo la riga lunga per Pylint
+    status_text = (
+        f"--- STATO LIVE: A:{a.free_slots:02d} | "
+        f"B:{b.free_slots:02d} | C:{c.free_slots:02d} ---"
+    )
 
     # 2. Stampiamo la stringa usando i codici ANSI
     print(
@@ -81,13 +84,15 @@ def flusso_automatico():
     zone = [a, b, c]
     while True:
         time.sleep(random.uniform(0.5, 2.0))
-        for zona in zone:
+        # Fix W0621: Cambiato nome variabile da 'zona' a 'single_zone'
+        # per non confonderla con quella globale
+        for single_zone in zone:
             evento = random.randint(0, 100)
             if evento < 40:
-                zona.park()
+                single_zone.park()
             elif 40 <= evento < 60:
-                zona.unpark()
-        
+                single_zone.unpark()
+
         update_header_only()
 
 # --- AVVIO PROGRAMMA ---
@@ -129,17 +134,17 @@ while True:
 
     if nome_zona in mappa_zone:
         zona = mappa_zone[nome_zona]
-        
+
         if azione == "park":
             esito = zona.park() # Ora catturiamo il True/False che ritorna la tua classe
             if esito:
                 print(f"\r✅ Comando: PARK su {zona.name}", end="", flush=True)
             else:
                 print(f"\r❌ Parcheggio PIENO su {zona.name}!", end="", flush=True)
-            
+
             time.sleep(0.5)
             print("\r\033[K", end="", flush=True)
-            
+
         elif azione == "unpark":
             esito = zona.unpark()
             if esito:
@@ -149,7 +154,7 @@ while True:
 
             time.sleep(0.5)
             print("\r\033[K", end="", flush=True)
-            
+
         else:
             print(f"\r❌ Azione '{azione}' non valida!", end="", flush=True)
             time.sleep(0.5)
