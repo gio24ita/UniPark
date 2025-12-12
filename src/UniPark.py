@@ -7,6 +7,7 @@ import os
 if os.name == "nt":
     os.system("")
 
+
 # --- CLASSE PARCHEGGIO ---
 class ParkingZone:
     def __init__(self, name, capacity, free_slots):
@@ -44,10 +45,12 @@ class ParkingZone:
         with self.lock:
             return f"{self.free_slots}/{self.capacity}"
 
+
 # --- ISTANZE GLOBALI ---
 a = ParkingZone("Zona A", 60, random.randint(1, 60))
 b = ParkingZone("Zona B", 45, random.randint(1, 45))
 c = ParkingZone("Zona C", 80, random.randint(1, 80))
+
 
 # --- GESTIONE GRAFICA CORRETTA ---
 def update_header_only():
@@ -61,16 +64,17 @@ def update_header_only():
 
     # 2. Stampiamo la stringa usando i codici ANSI
     print(
-        f"\033[s"       # ANSI: Salva la posizione attuale del cursore
-        f"\033[1;1H"    # ANSI: Sposta il cursore alla Riga 1, Colonna 1
-        f"\033[2K"      # ANSI: Cancella la riga corrente
-        f"\033[1;36m"   # ANSI: Colore Ciano
-        f"{status_text}"# Testo
-        f"\033[0m"      # ANSI: Reset colore
-        f"\033[u",      # ANSI: Ripristina il cursore dov'era
+        f"\033[s"  # ANSI: Salva la posizione attuale del cursore
+        f"\033[1;1H"  # ANSI: Sposta il cursore alla Riga 1, Colonna 1
+        f"\033[2K"  # ANSI: Cancella la riga corrente
+        f"\033[1;36m"  # ANSI: Colore Ciano
+        f"{status_text}"  # Testo
+        f"\033[0m"  # ANSI: Reset colore
+        f"\033[u",  # ANSI: Ripristina il cursore dov'era
         end="",
         flush=True,
     )
+
 
 def clear_screen():
     if os.name == "nt":
@@ -95,9 +99,10 @@ def flusso_automatico():
 
         update_header_only()
 
+
 # --- AVVIO PROGRAMMA ---
 clear_screen()
-print("\n") # Spazio per header
+print("\n")  # Spazio per header
 print("Simulazione avviata. Scrivi i comandi sotto (es. 'park a').\n")
 
 simulazione_thread = threading.Thread(target=flusso_automatico)
@@ -125,7 +130,9 @@ while True:
     parti = comando_input.split()
 
     if len(parti) != 2:
-        print("\r⚠️  Formato errato! Usa: 'azione zona' (es. park a)", end="", flush=True)
+        print(
+            "\r⚠️  Formato errato! Usa: 'azione zona' (es. park a)", end="", flush=True
+        )
         time.sleep(0.5)
         print("\r\033[K", end="", flush=True)
         continue
@@ -136,7 +143,9 @@ while True:
         zona = mappa_zone[nome_zona]
 
         if azione == "park":
-            esito = zona.park() # Ora catturiamo il True/False che ritorna la tua classe
+            esito = (
+                zona.park()
+            )  # Ora catturiamo il True/False che ritorna la tua classe
             if esito:
                 print(f"\r✅ Comando: PARK su {zona.name}", end="", flush=True)
             else:
