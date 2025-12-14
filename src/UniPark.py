@@ -149,9 +149,17 @@ while True:
         if azione == "park":
             esito = zona.park()
             if esito:
-                print(f"\r✅ Comando: PARK su {zona.name} (parcheggiato)", end="", flush=True)
+                print(
+                    f"\r✅ Comando: PARK su {zona.name} (parcheggiato)",
+                    end="",
+                    flush=True,
+                )
             else:
-                print(f"\r⚠️  Parcheggio PIENO su {zona.name}, aggiunto in coda!", end="", flush=True)
+                print(
+                    f"\r⚠️  Parcheggio PIENO su {zona.name}, aggiunto in coda!",
+                    end="",
+                    flush=True,
+                )
 
             time.sleep(0.5)
             print("\r\033[K", end="", flush=True)
@@ -159,7 +167,11 @@ while True:
         elif azione == "unpark":
             esito = zona.unpark()
             if esito:
-                print(f"\r✅ Comando: UNPARK su {zona.name} (liberato)", end="", flush=True)
+                print(
+                    f"\r✅ Comando: UNPARK su {zona.name} (liberato)",
+                    end="",
+                    flush=True,
+                )
             else:
                 print(f"\r❌ Parcheggio già VUOTO su {zona.name}!", end="", flush=True)
 
