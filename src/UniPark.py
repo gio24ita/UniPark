@@ -106,6 +106,7 @@ def clear_screen():
 ### 6. IL THREAD AUTOMATICO (Il "Motore" nascosto) ###
 # Questa funzione girerà in parallelo al programma principale.
 # Simula la vita reale: auto che arrivano e partono da sole.
+'''
 def flusso_automatico():  # DA RIVEDERE
     zone = [a, b, c]
     while True:
@@ -123,7 +124,23 @@ def flusso_automatico():  # DA RIVEDERE
 
         # Importante: dopo che il computer ha mosso le auto, aggiorna la grafica
         update_header_only()
+'''
 
+def flusso_automatico(x):  # DA RIVEDERE
+    while True:
+        # Aspetta un tempo casuale tra 0.5 e 2 secondi
+        time.sleep(random.uniform(0.5, 2.0))
+
+        # Tira una moneta (o quasi): genera un numero da 0 a 100
+        evento = random.randint(0, 100)
+        
+        if evento < 40:  # 40% di probabilità di parcheggiare
+            x.park()
+        elif 40 <= evento < 60:  # 20% di probabilità di uscire
+            x.unpark()
+
+        # Importante: dopo che il computer ha mosso le auto, aggiorna la grafica
+        update_header_only()
 
 ### 7. AVVIO DEL PROGRAMMA ###
 # Qui prepariamo il terreno prima di entrare nel ciclo infinito.
@@ -132,11 +149,18 @@ print("\n")  # Lasciamo una riga vuota in alto per l'header
 print("Simulazione avviata. Scrivi i comandi sotto (es. 'park a').\n")
 
 # Configuriamo il thread
-simulazione_thread = threading.Thread(target=flusso_automatico)
+simulazione_thread = threading.Thread(target=flusso_automatico,args = (a,))
+simulazione_thread2 = threading.Thread(target=flusso_automatico,args = (b,))
+simulazione_thread3 = threading.Thread(target=flusso_automatico,args = (c,))
+
 # daemon = True significa: "Se l'utente chiude il programma principale,
 # tu (thread) devi morire subito, non restare attivo in background".
 simulazione_thread.daemon = True
+simulazione_thread2.daemon = True
+simulazione_thread3.daemon = True
 simulazione_thread.start()  # Via!
+simulazione_thread2.start()  # Via!
+simulazione_thread3.start()  # Via!
 
 
 ### 8. LOOP PRINCIPALE (Interazione Utente) ###
