@@ -37,9 +37,9 @@ class ParkingZone:
             if self.free_slots > 0:
                 self.free_slots -= 1
                 return True  # Parcheggiato con successo
-            else:
-                self.waiting += 1
-                return False  # Aggiunto alla coda
+
+            self.waiting += 1
+            return False  # Aggiunto alla coda
 
     def unpark(self):
         """Libera un posto: se possibile, libera e poi parcheggia il primo in coda se presente."""
@@ -61,30 +61,6 @@ class ParkingZone:
         # Solo chi ha la chiave (thread automatico o utente) può entrare,
         # modificare i posti e poi uscire restituendo la chiave.
         self.lock = threading.Lock()
-
-    def park(self):
-        # 'with self.lock' acquisisce la chiave. Se è occupata, aspetta qui in fila.
-        with self.lock:
-            if self.free_slots > 0:
-                self.free_slots -= 1
-                return True  # Parcheggio riuscito
-
-            return False  # Parcheggio pieno
-
-    def unpark(self):
-        with self.lock:  # Anche qui serve la chiave per evitare conflitti
-            if self.free_slots < self.capacity:
-                self.free_slots += 1
-                return True  # Uscita riuscita
-
-            return False  # Il parcheggio era già vuoto
-
-    def get_status(self):
-        # Anche solo per leggere il numero serve il lock, per evitare di leggere
-        # un numero mentre sta venendo modificato (es. lettura "sporca").
-
-        with self.lock:
-            return f"{self.free_slots}/{self.capacity} ({self.waiting})"
 
 
 ### 3. CREAZIONE DELLE ZONE (Oggetti Globali) ###
