@@ -28,7 +28,6 @@ class ParkingZone:
         else:
             self.free_slots = free_slots
 
-
         self.waiting = 0  # Contatore per la lunghezza della coda d'attesa
         self.lock = threading.Lock()
 
@@ -105,7 +104,6 @@ def update_header_only():
 
     # Nota: spezziamo la riga lunga per Pylint
 
-
     # Prepariamo il testo. :02d significa "formatta il numero con almeno 2 cifre" (es. 05)
 
     status_text = (
@@ -113,7 +111,6 @@ def update_header_only():
         f"B:{b.free_slots:02d}/{b.capacity} Q:{b.waiting:02d} | "
         f"C:{c.free_slots:02d}/{c.capacity} Q:{c.waiting:02d} ---"
     )
-
 
     # Stampiamo la stringa usando i codici ANSI
     print(
@@ -126,7 +123,7 @@ def update_header_only():
         f"\033[u",  # Ripristina cursore
         end="",
         flush=True,
-
+    )
     # SPIEGAZIONE CODICI ANSI:
     # \033[s    -> SALVA la posizione del cursore (dove stai scrivendo ora)
     # \033[1;1H -> VAI alla riga 1, colonna 1 (angolo in alto a sinistra)
@@ -138,7 +135,6 @@ def update_header_only():
         f"\033[s\033[1;1H\033[2K\033[1;36m{status_text}\033[0m\033[u",
         end="",  # end="" evita di andare a capo automaticamente
         flush=True,  # flush=True forza la stampa immediata (essenziale con sleep)
-
     )
 
 
@@ -161,9 +157,6 @@ def flusso_automatico():  # DA RIVEDERE
         # Aspetta un tempo casuale tra 0.5 e 2 secondi
         time.sleep(random.uniform(0.5, 2.0))
 
-
-
-
         for single_zone in zone:
             # Tira una moneta (o quasi): genera un numero da 0 a 100
             evento = random.randint(0, 100)
@@ -173,12 +166,10 @@ def flusso_automatico():  # DA RIVEDERE
             elif 40 <= evento < 60:
                 single_zone.unpark()  # Partenza: libera se possibile e gestisce coda
 
-
             if evento < 40:  # 40% di probabilità di parcheggiare
                 single_zone.park()
             elif 40 <= evento < 60:  # 20% di probabilità di uscire
                 single_zone.unpark()
-
 
         # Importante: dopo che il computer ha mosso le auto, aggiorna la grafica
         update_header_only()
