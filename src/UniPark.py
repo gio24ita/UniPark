@@ -1,9 +1,3 @@
-"""
-UniPark - Versione HYBRID MULTI-THREAD
-Struttura: UI Avanzata (Codice 2) + Logica Multi-Thread Indipendente (Codice 1)
-Descrizione: Ogni zona parcheggio ha il suo thread dedicato che opera a velocità variabile.
-"""
-
 import os
 import random
 import shutil
@@ -44,16 +38,16 @@ class ParkingZone:
             if self.free_slots > 0:
                 self.free_slots -= 1
                 return True
-            else:
-                self.waiting += 1
-                return False
+
+            self.waiting += 1
+            return False
 
     def unpark(self):
         with self.lock:
             # Logica FIFO per la coda
             if self.waiting > 0:
                 self.waiting -= 1
-                return True  # Un'auto esce, una dalla coda entra subito (saldo 0 sui posti)
+                return True  # Un'auto esce, una dalla coda entra subito
 
             if self.free_slots < self.capacity:
                 self.free_slots += 1
@@ -78,17 +72,19 @@ class ParkingZone:
 
 class UniParkSystem:
     def __init__(self):
-        # Inizializzazione Zone
-        self.zona_a = ParkingZone("Viale A. Doria", 60, random.randint(20, 60))
-        self.zona_b = ParkingZone("DMI", 45, random.randint(15, 45))
-        self.zona_c = ParkingZone("Via S. Sofia", 80, random.randint(30, 80))
+        # Inizializzazione Zone (Semplificata per evitare troppi attributi)
+        # R0902: Too many instance attributes (Fixed by using list directly)
+        self.zones = [
+            ParkingZone("Viale A. Doria", 60, random.randint(20, 60)),
+            ParkingZone("DMI", 45, random.randint(15, 45)),
+            ParkingZone("Via S. Sofia", 80, random.randint(30, 80)),
+        ]
 
-        self.zones = [self.zona_a, self.zona_b, self.zona_c]
-        self.zone_map = {"a": self.zona_a, "b": self.zona_b, "c": self.zona_c}
+        self.zone_map = {"a": self.zones[0], "b": self.zones[1], "c": self.zones[2]}
 
         self.running = True
 
-        # Lock globale per la scrittura a schermo (evita che i thread scrivano uno sopra l'altro)
+        # Lock globale per la scrittura a schermo
         self.system_lock = Lock()
 
         # Layout UI
@@ -138,7 +134,8 @@ class UniParkSystem:
                 bar_max_len = max(5, col_width - 18)
                 bar_len = min(10, bar_max_len)
                 filled = int((status["occupied"] / status["capacity"]) * bar_len)
-                bar = "█" * filled + "░" * (bar_len - filled)
+                # C0104: Disallowed name "bar" -> Renamed to progress_bar
+                progress_bar = "█" * filled + "░" * (bar_len - filled)
 
                 if status["rate"] > 95:
                     state_emoji = "🔴 PIENO"
@@ -150,7 +147,7 @@ class UniParkSystem:
                 # Costruzione blocco testo zona
                 line1 = f"📍 {status['name']}"
                 line2 = f"   {state_emoji}"
-                line3 = f"   [{bar}] {int(status['rate'])}%"
+                line3 = f"   [{progress_bar}] {int(status['rate'])}%"
                 line4 = f"   Lib: {status['free_slots']}/{status['capacity']}"
                 line5 = f"   Coda: {status['waiting']}"
 
@@ -173,20 +170,14 @@ class UniParkSystem:
 
             # Footer
             lines.append(make_line("-" * dash_width))
-            lines.append(
-                make_line(
-                    f"📊 TOTALE: {total_free}/{total_capacity} liberi | {total_waiting} in coda"
-                )
+            text_footer = (
+                f"📊 TOTALE: {total_free}/{total_capacity} liberi | "
+                f"{total_waiting} in coda"
             )
+            lines.append(make_line(text_footer))
             lines.append(make_line("=" * dash_width))
 
             # --- STAMPA ANSI MAGICA ---
-            # 1. Nascondi cursore (?25l)
-            # 2. Salva posizione (s)
-            # 3. Scrivi righe in alto
-            # 4. Ripristina posizione (u)
-            # 5. Mostra cursore (?25h)
-
             sys.stdout.write("\033[?25l")
             sys.stdout.write("\033[s")
 
@@ -210,32 +201,24 @@ class UniParkSystem:
 
     def _zone_worker(self, zone):
         """
-        WORKER INDIPENDENTE (Logica presa dal Primo Codice).
         Questa funzione gira in un thread separato PER OGNI ZONA.
         """
         while self.running:
-            # 1. Simulazione temporale non deterministica (ogni zona ha i suoi tempi)
+            # 1. Simulazione temporale non deterministica
             attesa = random.uniform(2.0, 5.0)
             time.sleep(attesa)
 
-            # 2. Generazione evento casuale
             if not self.running:
-                break  # Controllo sicurezza uscita
+                break
 
             evento = random.randint(0, 100)
 
-            # Logica probabilistica (40% park, 40% unpark, 20% idle)
-            changed = False
+            # W0612: Unused variable 'changed' removed
             if evento < 40:
                 zone.park()
-                changed = True
             elif 40 <= evento < 80:
                 zone.unpark()
-                changed = True
 
-            # 3. Aggiorna la dashboard solo se qualcosa è cambiato (o per refresh)
-            # Nota: Essendo multi-thread, più zone potrebbero chiedere l'update contemporaneamente.
-            # Il lock dentro print_live_dashboard gestirà la coda.
             self.print_live_dashboard()
 
     # ------------------ SEZIONE INPUT & CONTROLLO ------------------
@@ -257,7 +240,6 @@ class UniParkSystem:
 
             zone = self.zone_map[parts[1]]
 
-            # Esecuzione immediata comando manuale
             if action == "park":
                 success = zone.park()
                 msg = (
@@ -273,7 +255,6 @@ class UniParkSystem:
                     else f"⚠️  UNPARK: {zone.name} vuota"
                 )
 
-            # Aggiornamento immediato visivo
             self.show_feedback(msg)
             self.print_live_dashboard()
         else:
@@ -284,30 +265,30 @@ class UniParkSystem:
         sys.stdout.flush()
 
     def _read_char_windows(self):
-        import msvcrt
+        # C0415, E0401: Suppress import errors for non-Windows platforms
+        import msvcrt  # pylint: disable=import-outside-toplevel,import-error
 
         char = msvcrt.getch()
         if char == b"\r":
             return "\n"
-        elif char == b"\x08":
+        if char == b"\x08":
             return "\b"
         return char.decode("utf-8", errors="ignore")
 
     def start(self):
         self.clear_screen()
 
-        # Riserva spazio verticale
-        for i in range(self.PROMPT_LINE + 2):
+        # Riserva spazio verticale (W0612: unused variable 'i' fixed with '_')
+        for _ in range(self.PROMPT_LINE + 2):
             print()
 
         self.print_live_dashboard()
 
         # --- AVVIO MULTI-THREADING ---
-        # Invece di un thread unico, ne avviamo 3 separati (uno per zona)
         threads = []
         for zone in self.zones:
             t = threading.Thread(target=self._zone_worker, args=(zone,))
-            t.daemon = True  # Si chiudono se si chiude il main
+            t.daemon = True
             t.start()
             threads.append(t)
 
@@ -320,7 +301,6 @@ class UniParkSystem:
                 sys.stdout.write(f"\033[{self.PROMPT_LINE};3H")
                 sys.stdout.flush()
 
-                # Lettura carattere per carattere (Non-blocking per la UI)
                 cmd = ""
                 while True:
                     char = (
@@ -329,9 +309,12 @@ class UniParkSystem:
                         else self._read_char_windows()
                     )
 
-                    if char == "\n" or char == "\r":
+                    # R1714: Consider merging comparisons with 'in'
+                    if char in ("\n", "\r"):
                         break
-                    elif char == "\x7f" or char == "\b":  # Backspace
+
+                    # R1723: Unnecessary "elif" after "break" fixed
+                    if char in ("\x7f", "\b"):  # Backspace
                         if cmd:
                             cmd = cmd[:-1]
                             sys.stdout.write("\b \b")
@@ -353,7 +336,8 @@ class UniParkSystem:
             except KeyboardInterrupt:
                 self.running = False
                 break
-            except Exception:
+            except Exception:  # pylint: disable=broad-exception-caught
+                # Catching too general exception is intended here to keep UI alive
                 self.reset_prompt()
 
         # Uscita pulita
