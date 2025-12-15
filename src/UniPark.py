@@ -276,9 +276,10 @@ class UniParkSystem:
         return char.decode("utf-8", errors="ignore")
 
     def start(self):
+        """Entry point dell'applicazione"""
         self.clear_screen()
 
-        # Riserva spazio verticale (W0612: unused variable 'i' fixed with '_')
+        # Riserva spazio vuoto iniziale per l'interfaccia
         for _ in range(self.PROMPT_LINE + 2):
             print()
 
@@ -295,13 +296,20 @@ class UniParkSystem:
         self.reset_prompt()
 
         # --- LOOP DI INPUT PRINCIPALE ---
+        # Leggiamo i caratteri uno alla volta e proteggiamo ogni stampa
+        # con un Mutex (Lock) per evitare sovrapposizioni grafiche.
+
         while self.running:
             try:
-                # Ripristina cursore input
-                sys.stdout.write(f"\033[{self.PROMPT_LINE};3H")
-                sys.stdout.flush()
+                # Posizionamento cursore protetto
+                # Impediamo che un thread sposti il cursore mentre noi ci posizioniamo.
+                with self.system_lock:
+                    sys.stdout.write(f"\033[{self.PROMPT_LINE};3H")
+                    sys.stdout.flush()
 
                 cmd = ""
+
+                # Loop di lettura carattere per carattere
                 while True:
                     char = (
                         sys.stdin.read(1)
@@ -309,25 +317,35 @@ class UniParkSystem:
                         else self._read_char_windows()
                     )
 
-                    # R1714: Consider merging comparisons with 'in'
-                    if char in ("\n", "\r"):
+                    if char in ("\n", "\r"):  # Tasto Invio
                         break
 
-                    # R1723: Unnecessary "elif" after "break" fixed
-                    if char in ("\x7f", "\b"):  # Backspace
+                    if char in ("\x7f", "\b"):  # Gestione Backspace manuale
                         if cmd:
                             cmd = cmd[:-1]
-                            sys.stdout.write("\b \b")
-                            sys.stdout.flush()
+
+                            with self.system_lock:
+                                sys.stdout.write("\b \b")
+                                sys.stdout.flush()
                     else:
                         cmd += char
-                        sys.stdout.write(char)
-                        sys.stdout.flush()
 
-                # Pulisci riga input
-                sys.stdout.write(f"\033[{self.PROMPT_LINE};1H\033[K")
-                sys.stdout.flush()
+                        # Senza questo lock, il carattere potrebbe apparire in mezzo alla dashboard
+                        # se un aggiornamento avviene in questo esatto millisecondo.
+                        with self.system_lock:
+                            sys.stdout.write(char)
+                            sys.stdout.flush()
 
+                # 2. Pulizia "Ghost Text"
+                # Usiamo \033[2K (Clear Line) invece di \033[K.
+                # Questo risolve il bug dove il vecchio comando rimaneva visibile parzialmente.
+                with self.system_lock:
+                    sys.stdout.write(f"\033[{self.PROMPT_LINE};1H\033[2K")
+                    # Vai alla riga SUCCESSIVA e cancella tutto (rimuove il "park a" lasciato sotto)
+                    sys.stdout.write(f"\033[{self.PROMPT_LINE + 1};1H\033[2K")
+                    sys.stdout.flush()
+
+                # Esecuzione comando
                 if cmd.strip():
                     self.handle_user_command(cmd.strip())
 
@@ -336,8 +354,8 @@ class UniParkSystem:
             except KeyboardInterrupt:
                 self.running = False
                 break
-            except Exception:  # pylint: disable=broad-exception-caught
-                # Catching too general exception is intended here to keep UI alive
+            except Exception:
+                # Gestione robusta errori per non crashare l'intera simulazione
                 self.reset_prompt()
 
         # Uscita pulita
