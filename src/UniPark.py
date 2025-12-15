@@ -266,3 +266,5 @@ if __name__ == "__main__":
         except KeyboardInterrupt:
             # Gestione Ctrl+C per uscita pulita
             break
+
+# fix: trigger pipeline
