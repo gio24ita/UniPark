@@ -1,268 +1,368 @@
 import os
 import random
+import shutil
+import sys
 import threading
 import time
+from threading import Lock
 
-# ==============================================================================
-# CONFIGURAZIONE SISTEMA & GESTIONE CONCORRENZA
-# ==============================================================================
-
-# Abilitazione codici ANSI per terminali Windows legacy.
-# Necessario per visualizzare colori e muovere il cursore correttamente.
+# --- CONFIGURAZIONE ANSI PER WINDOWS ---
 if os.name == "nt":
     os.system("")
 
-# --- SCREEN MUTEX (MUTUAL EXCLUSION) ---
-# Questo Lock agisce come un "semaforo" per l'accesso alla console (stdout).
-# PROBLEMA: Se due thread provano a stampare contemporaneamente, il testo si mescola
-# creando artefatti visivi.
-# SOLUZIONE: Chi vuole scrivere deve acquisire questo lock.
-screen_lock = threading.Lock()
-
-
-# ==============================================================================
-# MODELLO DATI: CLASSE PARKING ZONE
-# ==============================================================================
+# ==================== LOGICA DATI (MODEL) ====================
 
 
 class ParkingZone:
-    """
-    Rappresenta un'area di parcheggio gestita in modo thread-safe.
-    Incapsula lo stato (posti liberi, code) e la logica di accesso.
-    """
+    """Modello che gestisce i dati del singolo parcheggio in modo Thread-Safe."""
 
     def __init__(self, name, capacity, free_slots):
         self.name = name
         self.capacity = capacity
-
-        # Validazione dati (Clamping): Assicura che i posti iniziali siano
-        # logici (tra 0 e la capacità massima), prevenendo stati inconsistenti.
+        # Clamping dei valori iniziali
         self.free_slots = max(0, min(free_slots, capacity))
         self.waiting = 0
+        # Lock specifico per i dati di questa zona
+        self.lock = Lock()
 
-        # --- DATA MUTEX ---
-        # Ogni zona ha il proprio lock privato. Questo garantisce l'atomicità
-        # delle operazioni su QUESTA specifica zona, senza bloccare le altre.
-        self.data_lock = threading.Lock()
+    @property
+    def occupied_slots(self):
+        return self.capacity - self.free_slots
+
+    @property
+    def occupancy_rate(self):
+        return (self.occupied_slots / self.capacity) * 100
 
     def park(self):
-        """
-        Tenta di parcheggiare un veicolo.
-        Thread-safe: Gestisce automaticamente la concorrenza.
-        Returns: True se parcheggiato, False se aggiunto in coda.
-        """
-        # CRITICAL SECTION: Nessun altro thread può modificare questa zona ora.
-        with self.data_lock:
+        with self.lock:
             if self.free_slots > 0:
                 self.free_slots -= 1
                 return True
+
             self.waiting += 1
             return False
 
     def unpark(self):
-        """
-        Rimuove un veicolo dal parcheggio.
-        Gestisce la priorità della coda FIFO (First-In-First-Out).
-        Returns: True se l'operazione ha avuto effetto, False se vuoto.
-        """
-        with self.data_lock:
-            # Priorità alla coda: se esce un'auto, entra subito chi aspetta.
+        with self.lock:
+            # Logica FIFO per la coda
             if self.waiting > 0:
                 self.waiting -= 1
-                return True  # Posto liberato e rioccupato istantaneamente
+                return True  # Un'auto esce, una dalla coda entra subito
 
-            # Se non c'è coda, si libera effettivamente un posto.
             if self.free_slots < self.capacity:
                 self.free_slots += 1
                 return True
-
             return False
 
-
-# ==============================================================================
-# ISTANZE GLOBALI
-# ==============================================================================
-
-# Inizializzazione delle risorse condivise con stato iniziale casuale
-a = ParkingZone("Zona A", 60, random.randint(1, 60))
-b = ParkingZone("Zona B", 45, random.randint(1, 45))
-c = ParkingZone("Zona C", 80, random.randint(1, 80))
-
-# Lookup table per mappare l'input stringa dell'utente all'oggetto reale
-mappa_zone = {"a": a, "b": b, "c": c}
-
-
-# ==============================================================================
-# GESTIONE INTERFACCIA UTENTE (UI)
-# ==============================================================================
+    def get_status_dict(self):
+        """Restituisce una fotografia dello stato attuale per la UI."""
+        with self.lock:
+            return {
+                "name": self.name,
+                "capacity": self.capacity,
+                "free_slots": self.free_slots,
+                "occupied": self.occupied_slots,
+                "waiting": self.waiting,
+                "rate": self.occupancy_rate,
+            }
 
 
-def update_header():
-    """
-    Rendering della Dashboard in tempo reale.
-    Utilizza sequenze di escape ANSI per aggiornare solo la riga superiore
-    senza causare flickering (sfarfallio) o cancellare l'input utente.
-
-    WARNING: Questa funzione NON acquisisce il lock da sola.
-    Il chiamante DEVE possedere 'screen_lock' prima di invocarla.
-    """
-    status = (
-        f"--- STATO LIVE: A:{a.free_slots:02d}/{a.capacity} (Q:{a.waiting}) | "
-        f"B:{b.free_slots:02d}/{b.capacity} (Q:{b.waiting}) | "
-        f"C:{c.free_slots:02d}/{c.capacity} (Q:{c.waiting}) ---"
-    )
-
-    # ANSI MAGIC:
-    # \033[s    -> Salva la posizione attuale del cursore (dove l'utente scrive)
-    # \033[1;1H -> Sposta il cursore forzatamente alla riga 1, colonna 1
-    # \033[2K   -> Pulisce interamente la riga corrente (la riga 1)
-    # \033[1;36m-> Imposta il colore del testo a Ciano Brillante
-    # {status}  -> Stampa il testo
-    # \033[0m   -> Resetta il colore al default
-    # \033[u    -> Ripristina il cursore alla posizione salvata (dove l'utente scrive)
-    print(f"\033[s\033[1;1H\033[2K\033[1;36m{status}\033[0m\033[u", end="", flush=True)
+# ==================== SISTEMA UNIPARK (CONTROLLER & VIEW) ====================
 
 
-def clear_screen():
-    """Pulisce il terminale in modo cross-platform (Windows/Unix)."""
-    os.system("cls" if os.name == "nt" else "clear")
+class UniParkSystem:
+    def __init__(self):
+        # Inizializzazione Zone (Semplificata per evitare troppi attributi)
+        # R0902: Too many instance attributes (Fixed by using list directly)
+        self.zones = [
+            ParkingZone("Viale A. Doria", 60, random.randint(20, 60)),
+            ParkingZone("DMI", 45, random.randint(15, 45)),
+            ParkingZone("Via S. Sofia", 80, random.randint(30, 80)),
+        ]
 
+        self.zone_map = {"a": self.zones[0], "b": self.zones[1], "c": self.zones[2]}
 
-# ==============================================================================
-# LOGICA DI SIMULAZIONE (BACKGROUND WORKERS)
-# ==============================================================================
+        self.running = True
 
+        # Lock globale per la scrittura a schermo
+        self.system_lock = Lock()
 
-def thread_zona_individuale(zona):
-    """
-    Funzione Worker eseguita da ogni Thread indipendente.
-    Simula il comportamento autonomo di una singola zona di parcheggio.
-    """
-    while True:
-        # 1. Simulazione temporale non deterministica
-        # Ogni zona "vive" con i propri ritmi, indipendentemente dalle altre.
-        attesa = random.uniform(2.0, 5.0)
-        time.sleep(attesa)
+        # Layout UI
+        self.DASHBOARD_HEIGHT = 12
+        self.PROMPT_LINE = self.DASHBOARD_HEIGHT + 2
 
-        # 2. Generazione evento casuale (Business Logic simulata)
-        evento = random.randint(0, 100)
+    def clear_screen(self):
+        os.system("cls" if os.name == "nt" else "clear")
 
-        # Logica probabilistica:
-        # 0-39%  -> Arrivo auto (Park)
-        # 40-79% -> Partenza auto (Unpark)
-        # 80-100%-> Nessun evento (Idle)
-        if evento < 40:
-            zona.park()
-        elif 40 <= evento < 80:
-            zona.unpark()
+    # ------------------ SEZIONE RENDERING (UI) ------------------
 
-        # 3. Aggiornamento UI Thread-Safe
-        # Acquisiamo il lock globale dello schermo per aggiornare la dashboard.
-        # Se l'utente sta scrivendo o un altro thread sta aggiornando, aspettiamo qui.
-        with screen_lock:
-            update_header()
+    def print_live_dashboard(self):
+        """
+        Ridisegna SOLO la dashboard in alto, preservando cursore e input utente.
+        Thread-Safe grazie a self.system_lock.
+        """
+        with self.system_lock:
+            cols, _ = shutil.get_terminal_size((80, 20))
+            dash_width = max(cols - 2, 40)
 
+            lines = []
 
-# ==============================================================================
-# MAIN ENTRY POINT
-# ==============================================================================
+            def make_line(text):
+                clean_text = text[:dash_width]
+                return f"{clean_text}\033[K"  # \033[K pulisce il resto della riga
 
-if __name__ == "__main__":
-    # Setup iniziale dell'ambiente grafico
-    clear_screen()
-    print(
-        "\n\nSimulazione Multi-Thread UniPark avviata.\nOgni zona è gestita da un processo indipendente.\n"
-    )
+            # Header
+            lines.append(make_line("=" * dash_width))
+            lines.append(make_line("🅿️  UNIPARK LIVE - DASHBOARD REAL-TIME"))
+            lines.append(make_line("=" * dash_width))
 
-    # Primo rendering statico della dashboard
-    with screen_lock:
-        update_header()
+            total_capacity = 0
+            total_free = 0
+            total_waiting = 0
 
-    # --- AVVIO CONCORRENZA ---
-    # Istanziamo un Thread separato per ogni zona.
-    # daemon=True: Questi thread sono "servitori". Se il programma principale
-    # (Main Thread) termina, questi thread vengono uccisi immediatamente dal SO.
-    t_a = threading.Thread(target=thread_zona_individuale, args=(a,), daemon=True)
-    t_b = threading.Thread(target=thread_zona_individuale, args=(b,), daemon=True)
-    t_c = threading.Thread(target=thread_zona_individuale, args=(c,), daemon=True)
+            columns_data = []
+            col_width = (dash_width // 3) - 3
 
-    t_a.start()
-    t_b.start()
-    t_c.start()
+            # Calcolo dati per ogni zona
+            for zone in self.zones:
+                status = zone.get_status_dict()
+                total_capacity += status["capacity"]
+                total_free += status["free_slots"]
+                total_waiting += status["waiting"]
 
-    # --- EVENT LOOP PRINCIPALE (Input Utente) ---
-    while True:
-        try:
-            # Input bloccante: il programma aspetta qui l'utente.
-            # I thread in background continuano a girare mentre siamo fermi qui.
-            cmd = input("Comando (es. 'park a') > ").strip().lower()
+                # Barra grafica
+                bar_max_len = max(5, col_width - 18)
+                bar_len = min(10, bar_max_len)
+                filled = int((status["occupied"] / status["capacity"]) * bar_len)
+                # C0104: Disallowed name "bar" -> Renamed to progress_bar
+                progress_bar = "█" * filled + "░" * (bar_len - filled)
 
-            # Appena ricevuto l'input, puliamo la riga per mantenere la UI pulita.
-            with screen_lock:
-                # \033[A (Cursore su di 1) + \033[2K (Cancella riga)
-                print("\033[A\033[2K", end="", flush=True)
+                if status["rate"] > 95:
+                    state_emoji = "🔴 PIENO"
+                elif status["rate"] > 70:
+                    state_emoji = "🟠 AFFOLLATO"
+                else:
+                    state_emoji = "🟢 LIBERO"
 
-            # Gestione uscita graceful
-            if cmd == "exit":
+                # Costruzione blocco testo zona
+                line1 = f"📍 {status['name']}"
+                line2 = f"   {state_emoji}"
+                line3 = f"   [{progress_bar}] {int(status['rate'])}%"
+                line4 = f"   Lib: {status['free_slots']}/{status['capacity']}"
+                line5 = f"   Coda: {status['waiting']}"
+
+                columns_data.append(
+                    [
+                        line1.ljust(col_width - 1),
+                        line2.ljust(col_width - 1),
+                        line3.ljust(col_width),
+                        line4.ljust(col_width),
+                        line5.ljust(col_width),
+                    ]
+                )
+
+            lines.append(make_line(""))
+
+            # Unione colonne
+            for row_tuple in zip(*columns_data):
+                row_str = " | ".join(row_tuple)
+                lines.append(make_line(row_str))
+
+            # Footer
+            lines.append(make_line("-" * dash_width))
+            text_footer = (
+                f"📊 TOTALE: {total_free}/{total_capacity} liberi | "
+                f"{total_waiting} in coda"
+            )
+            lines.append(make_line(text_footer))
+            lines.append(make_line("=" * dash_width))
+
+            # --- STAMPA ANSI MAGICA ---
+            sys.stdout.write("\033[?25l")
+            sys.stdout.write("\033[s")
+
+            for i, line in enumerate(lines, start=1):
+                sys.stdout.write(f"\033[{i};1H{line}")
+
+            sys.stdout.write("\033[u")
+            sys.stdout.write("\033[?25h")
+            sys.stdout.flush()
+
+    def show_feedback(self, msg):
+        """Mostra messaggi temporanei sotto la dashboard."""
+        feedback_line = self.DASHBOARD_HEIGHT + 1
+        sys.stdout.write(f"\033[?25l\033[{feedback_line};1H{msg}\033[K\033[?25h")
+        sys.stdout.flush()
+        time.sleep(1.2)
+        sys.stdout.write(f"\033[?25l\033[{feedback_line};1H\033[K\033[?25h")
+        sys.stdout.flush()
+
+    # ------------------ SEZIONE MULTI-THREAD (WORKERS) ------------------
+
+    def _zone_worker(self, zone):
+        """
+        Questa funzione gira in un thread separato PER OGNI ZONA.
+        """
+        while self.running:
+            # 1. Simulazione temporale non deterministica
+            attesa = random.uniform(2.0, 5.0)
+            time.sleep(attesa)
+
+            if not self.running:
                 break
 
-            # Gestione input vuoto (utente preme solo Invio)
-            if not cmd:
-                continue
+            evento = random.randint(0, 100)
 
-            # Parsing del comando
-            parts = cmd.split()
-            if len(parts) != 2:
-                # Feedback errore temporaneo
-                with screen_lock:
-                    print("\r❌ Formato errato!", end="", flush=True)
-                    time.sleep(1)
-                    print("\r\033[2K", end="", flush=True)  # Cancella msg errore
-                continue
+            # W0612: Unused variable 'changed' removed
+            if evento < 40:
+                zone.park()
+            elif 40 <= evento < 80:
+                zone.unpark()
 
-            azione, zona_key = parts[0], parts[1]
+            self.print_live_dashboard()
 
-            # Validazione zona
-            if zona_key not in mappa_zone:
-                with screen_lock:
-                    print("\r❌ Zona inesistente", end="", flush=True)
-                    time.sleep(1)
-                    print("\r\033[2K", end="", flush=True)
-                continue
+    # ------------------ SEZIONE INPUT & CONTROLLO ------------------
 
-            target_zone = mappa_zone[zona_key]
+    def handle_user_command(self, command: str):
+        parts = command.strip().lower().split()
+        if not parts:
+            return
 
-            # Esecuzione logica comando manuale
-            msg = ""
-            if azione == "park":
-                ok = target_zone.park()
+        action = parts[0]
+        if action == "exit":
+            self.running = False
+            return
+
+        if action in ["park", "unpark"]:
+            if len(parts) < 2 or parts[1] not in self.zone_map:
+                self.show_feedback(f"⚠️  Usa: {action} [a|b|c]")
+                return
+
+            zone = self.zone_map[parts[1]]
+
+            if action == "park":
+                success = zone.park()
                 msg = (
-                    f"✅ Manuale: Park in {target_zone.name}"
-                    if ok
-                    else f"⚠️ {target_zone.name} PIENO!"
-                )
-            elif azione == "unpark":
-                ok = target_zone.unpark()
-                msg = (
-                    f"✅ Manuale: Unpark da {target_zone.name}"
-                    if ok
-                    else f"❌ {target_zone.name} vuoto!"
+                    f"✅ MANUAL PARK: {zone.name}"
+                    if success
+                    else f"⏳ PARK: {zone.name} PIENA → Coda"
                 )
             else:
-                msg = "❌ Azione ignota"
+                success = zone.unpark()
+                msg = (
+                    f"👋 MANUAL UNPARK: {zone.name}"
+                    if success
+                    else f"⚠️  UNPARK: {zone.name} vuota"
+                )
 
-            # Rendering Feedback Utente + Aggiornamento Immediato Dashboard
-            with screen_lock:
-                print(f"\r{msg}", end="", flush=True)
-                update_header()
+            self.show_feedback(msg)
+            self.print_live_dashboard()
+        else:
+            self.show_feedback(f"⚠️  Comando sconosciuto: {action}")
 
-            # Mantieni il feedback visibile per 0.5 secondi
-            time.sleep(0.5)
+    def reset_prompt(self):
+        sys.stdout.write(f"\033[{self.PROMPT_LINE};1H> \033[K")
+        sys.stdout.flush()
 
-            # Cleanup finale della riga di feedback
-            with screen_lock:
-                print("\r\033[2K", end="", flush=True)
+    def _read_char_windows(self):
+        # C0415, E0401: Suppress import errors for non-Windows platforms
+        import msvcrt  # pylint: disable=import-outside-toplevel,import-error
 
-        except KeyboardInterrupt:
-            # Gestione Ctrl+C per uscita pulita
-            break
+        char = msvcrt.getch()
+        if char == b"\r":
+            return "\n"
+        if char == b"\x08":
+            return "\b"
+        return char.decode("utf-8", errors="ignore")
+
+    def start(self):
+        self.clear_screen()
+
+        # Riserva spazio verticale (W0612: unused variable 'i' fixed with '_')
+        for _ in range(self.PROMPT_LINE + 2):
+            print()
+
+        self.print_live_dashboard()
+
+        # --- AVVIO MULTI-THREADING ---
+        threads = []
+        for zone in self.zones:
+            t = threading.Thread(target=self._zone_worker, args=(zone,))
+            t.daemon = True
+            t.start()
+            threads.append(t)
+
+        self.reset_prompt()
+
+        # --- LOOP DI INPUT PRINCIPALE ---
+        while self.running:
+            try:
+                # Ripristina cursore input
+                sys.stdout.write(f"\033[{self.PROMPT_LINE};3H")
+                sys.stdout.flush()
+
+                cmd = ""
+                while True:
+                    char = (
+                        sys.stdin.read(1)
+                        if os.name != "nt"
+                        else self._read_char_windows()
+                    )
+
+                    # R1714: Consider merging comparisons with 'in'
+                    if char in ("\n", "\r"):
+                        break
+
+                    # R1723: Unnecessary "elif" after "break" fixed
+                    if char in ("\x7f", "\b"):  # Backspace
+                        if cmd:
+                            cmd = cmd[:-1]
+                            sys.stdout.write("\b \b")
+                            sys.stdout.flush()
+                    else:
+                        cmd += char
+                        sys.stdout.write(char)
+                        sys.stdout.flush()
+
+                # Pulisci riga input
+                sys.stdout.write(f"\033[{self.PROMPT_LINE};1H\033[K")
+                sys.stdout.flush()
+
+                if cmd.strip():
+                    self.handle_user_command(cmd.strip())
+
+                self.reset_prompt()
+
+            except KeyboardInterrupt:
+                self.running = False
+                break
+            except Exception:  # pylint: disable=broad-exception-caught
+                # Catching too general exception is intended here to keep UI alive
+                self.reset_prompt()
+
+        # Uscita pulita
+        sys.stdout.write(f"\033[{self.PROMPT_LINE + 2};1H")
+        print("\n✅ Sistema UniPark terminato.")
+
+
+# ==================== MAIN ====================
+
+if __name__ == "__main__":
+    app = UniParkSystem()
+
+    os.system("cls" if os.name == "nt" else "clear")
+    print("\n" + "=" * 60)
+    print("🎓 UNIPARK - Sistema Gestione Parcheggi")
+    print("=" * 60)
+    print("\n📋 Zone disponibili:")
+    print("   A - Viale A. Doria (60)")
+    print("   B - DMI (45)")
+    print("   C - Via S. Sofia (80)")
+    print("\n🎮 Comandi:")
+    print("   park   [a|b|c] - Parcheggia")
+    print("   unpark [a|b|c] - Esci")
+    print("   exit           - Chiudi")
+    print("\n" + "=" * 60 + "\n")
+    input("Premi INVIO per avviare la simulazione... ")
+
+    app.start()
