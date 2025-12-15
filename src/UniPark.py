@@ -225,9 +225,9 @@ if __name__ == "__main__":
             # Validazione zona
             if zona_key not in mappa_zone:
                 with screen_lock:
-                    print(f"\r❌ Zona inesistente", end="", flush=True)
+                    print("\r❌ Zona inesistente", end="", flush=True)
                     time.sleep(1)
-                    print(f"\r\033[2K", end="", flush=True)
+                    print("\r\033[2K", end="", flush=True)
                 continue
 
             target_zone = mappa_zone[zona_key]
@@ -253,7 +253,7 @@ if __name__ == "__main__":
 
             # Rendering Feedback Utente + Aggiornamento Immediato Dashboard
             with screen_lock:
-                print(f"\r{msg}", end="", flush=True)
+                print("\r{msg}", end="", flush=True)
                 update_header()
 
             # Mantieni il feedback visibile per 0.5 secondi
@@ -261,7 +261,7 @@ if __name__ == "__main__":
 
             # Cleanup finale della riga di feedback
             with screen_lock:
-                print(f"\r\033[2K", end="", flush=True)
+                print("\r\033[2K", end="", flush=True)
 
         except KeyboardInterrupt:
             # Gestione Ctrl+C per uscita pulita
