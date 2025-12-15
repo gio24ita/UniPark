@@ -3,257 +3,266 @@ import random
 import threading
 import time
 
-### 1. CONFIGURAZIONE DEL SISTEMA ###
-# Questo blocco serve a garantire che i colori e i movimenti del cursore
-# funzionino anche su Windows. Windows (specialmente cmd.exe vecchi)
-# non supporta nativamente i codici ANSI senza questa "spinta".
+# ==============================================================================
+# CONFIGURAZIONE SISTEMA & GESTIONE CONCORRENZA
+# ==============================================================================
+
+# Abilitazione codici ANSI per terminali Windows legacy.
+# Necessario per visualizzare colori e muovere il cursore correttamente.
 if os.name == "nt":
-    os.system("")  # Esegue un comando vuoto che abilita la modalità VT100 su Windows
+    os.system("")
+
+# --- SCREEN MUTEX (MUTUAL EXCLUSION) ---
+# Questo Lock agisce come un "semaforo" per l'accesso alla console (stdout).
+# PROBLEMA: Se due thread provano a stampare contemporaneamente, il testo si mescola
+# creando artefatti visivi.
+# SOLUZIONE: Chi vuole scrivere deve acquisire questo lock.
+screen_lock = threading.Lock()
 
 
-### 2. CLASSE PARKING ZONE (Il "modello" dei dati) ###
-# Questa classe rappresenta una singola zona di parcheggio.
-# Contiene la logica per gestire i posti e, soprattutto, la sicurezza (Lock)
-# per evitare che il computer e l'utente modifichino i dati nello stesso istante.
+# ==============================================================================
+# MODELLO DATI: CLASSE PARKING ZONE
+# ==============================================================================
+
+
 class ParkingZone:
+    """
+    Rappresenta un'area di parcheggio gestita in modo thread-safe.
+    Incapsula lo stato (posti liberi, code) e la logica di accesso.
+    """
+
     def __init__(self, name, capacity, free_slots):
         self.name = name
         self.capacity = capacity
 
-        # Controllo dati: evitiamo di avere più posti liberi della capienza massima
-        if free_slots > capacity:
-            self.free_slots = capacity
-        elif free_slots < 0:
-            self.free_slots = 0
-        else:
-            self.free_slots = free_slots
+        # Validazione dati (Clamping): Assicura che i posti iniziali siano
+        # logici (tra 0 e la capacità massima), prevenendo stati inconsistenti.
+        self.free_slots = max(0, min(free_slots, capacity))
+        self.waiting = 0
 
-        self.waiting = 0  # Contatore per la lunghezza della coda d'attesa
-        self.lock = threading.Lock()
+        # --- DATA MUTEX ---
+        # Ogni zona ha il proprio lock privato. Questo garantisce l'atomicità
+        # delle operazioni su QUESTA specifica zona, senza bloccare le altre.
+        self.data_lock = threading.Lock()
 
     def park(self):
-        """Tenta di parcheggiare: se posto libero, parcheggia; altrimenti, aggiunge alla coda."""
-        with self.lock:
+        """
+        Tenta di parcheggiare un veicolo.
+        Thread-safe: Gestisce automaticamente la concorrenza.
+        Returns: True se parcheggiato, False se aggiunto in coda.
+        """
+        # CRITICAL SECTION: Nessun altro thread può modificare questa zona ora.
+        with self.data_lock:
             if self.free_slots > 0:
                 self.free_slots -= 1
-                return True  # Parcheggiato con successo
-
-            self.waiting += 1
-            return False  # Aggiunto alla coda
-
-    def unpark(self):
-        """Libera un posto: se possibile, libera e poi parcheggia il primo in coda se presente."""
-        with self.lock:
-            if self.free_slots < self.capacity:
-                self.free_slots += 1
-                # Controlla se c'è qualcuno in coda
-                if self.waiting > 0:
-                    self.waiting -= 1
-                    self.free_slots -= 1  # Parcheggia il primo in coda
                 return True
+            self.waiting += 1
             return False
 
-    def get_status(self):
-        """Restituisce lo stato attuale: posti liberi/capacità (in coda)."""
+    def unpark(self):
+        """
+        Rimuove un veicolo dal parcheggio.
+        Gestisce la priorità della coda FIFO (First-In-First-Out).
+        Returns: True se l'operazione ha avuto effetto, False se vuoto.
+        """
+        with self.data_lock:
+            # Priorità alla coda: se esce un'auto, entra subito chi aspetta.
+            if self.waiting > 0:
+                self.waiting -= 1
+                return True  # Posto liberato e rioccupato istantaneamente
 
-        # IL LOCK (LUCCHETTO):
-        # È fondamentale nel multithreading. Immaginalo come la chiave del bagno.
-        # Solo chi ha la chiave (thread automatico o utente) può entrare,
-        # modificare i posti e poi uscire restituendo la chiave.
-        self.lock = threading.Lock()
+            # Se non c'è coda, si libera effettivamente un posto.
+            if self.free_slots < self.capacity:
+                self.free_slots += 1
+                return True
+
+            return False
 
 
-### 3. CREAZIONE DELLE ZONE (Oggetti Globali) ###
-# Creiamo le tre zone che useremo nel programma.
-# Usiamo numeri casuali (random) per non partire sempre con gli stessi valori.
+# ==============================================================================
+# ISTANZE GLOBALI
+# ==============================================================================
+
+# Inizializzazione delle risorse condivise con stato iniziale casuale
 a = ParkingZone("Zona A", 60, random.randint(1, 60))
 b = ParkingZone("Zona B", 45, random.randint(1, 45))
 c = ParkingZone("Zona C", 80, random.randint(1, 80))
 
+# Lookup table per mappare l'input stringa dell'utente all'oggetto reale
+mappa_zone = {"a": a, "b": b, "c": c}
 
-### 4. FUNZIONE GRAFICA (La "Magia" ANSI) ###
-# Questa funzione è responsabile dell'aggiornamento della barra in alto.
-# Usa codici di escape complessi per saltare in alto, scrivere e tornare in basso
-# senza disturbare quello che l'utente sta scrivendo.
-def update_header_only():
-    """Aggiorna solo la riga in alto."""
 
-    # Nota: spezziamo la riga lunga per Pylint
+# ==============================================================================
+# GESTIONE INTERFACCIA UTENTE (UI)
+# ==============================================================================
 
-    # Prepariamo il testo. :02d significa "formatta il numero con almeno 2 cifre" (es. 05)
 
-    status_text = (
-        f"--- STATO LIVE: A:{a.free_slots:02d}/{a.capacity} Q:{a.waiting:02d} | "
-        f"B:{b.free_slots:02d}/{b.capacity} Q:{b.waiting:02d} | "
-        f"C:{c.free_slots:02d}/{c.capacity} Q:{c.waiting:02d} ---"
+def update_header():
+    """
+    Rendering della Dashboard in tempo reale.
+    Utilizza sequenze di escape ANSI per aggiornare solo la riga superiore
+    senza causare flickering (sfarfallio) o cancellare l'input utente.
+
+    WARNING: Questa funzione NON acquisisce il lock da sola.
+    Il chiamante DEVE possedere 'screen_lock' prima di invocarla.
+    """
+    status = (
+        f"--- STATO LIVE: A:{a.free_slots:02d}/{a.capacity} (Q:{a.waiting}) | "
+        f"B:{b.free_slots:02d}/{b.capacity} (Q:{b.waiting}) | "
+        f"C:{c.free_slots:02d}/{c.capacity} (Q:{c.waiting}) ---"
     )
 
-    # Stampiamo la stringa usando i codici ANSI
-    print(
-        f"\033[s"  # Salva posizione cursore
-        f"\033[1;1H"  # Sposta a riga 1, colonna 1
-        f"\033[2K"  # Cancella riga
-        f"\033[1;36m"  # Colore ciano
-        f"{status_text}"  # Testo
-        f"\033[0m"  # Reset colore
-        f"\033[u",  # Ripristina cursore
-        end="",
-        flush=True,
-    )
-    # SPIEGAZIONE CODICI ANSI:
-    # \033[s    -> SALVA la posizione del cursore (dove stai scrivendo ora)
-    # \033[1;1H -> VAI alla riga 1, colonna 1 (angolo in alto a sinistra)
-    # \033[2K   -> CANCELLA tutta la riga (per pulire vecchie scritte)
-    # \033[1;36m -> COLORE Ciano brillante
-    # \033[0m   -> RESET colore (torna bianco)
-    # \033[u    -> RIPRISTINA il cursore dove l'avevamo salvato
-    print(
-        f"\033[s\033[1;1H\033[2K\033[1;36m{status_text}\033[0m\033[u",
-        end="",  # end="" evita di andare a capo automaticamente
-        flush=True,  # flush=True forza la stampa immediata (essenziale con sleep)
-    )
+    # ANSI MAGIC:
+    # \033[s    -> Salva la posizione attuale del cursore (dove l'utente scrive)
+    # \033[1;1H -> Sposta il cursore forzatamente alla riga 1, colonna 1
+    # \033[2K   -> Pulisce interamente la riga corrente (la riga 1)
+    # \033[1;36m-> Imposta il colore del testo a Ciano Brillante
+    # {status}  -> Stampa il testo
+    # \033[0m   -> Resetta il colore al default
+    # \033[u    -> Ripristina il cursore alla posizione salvata (dove l'utente scrive)
+    print(f"\033[s\033[1;1H\033[2K\033[1;36m{status}\033[0m\033[u", end="", flush=True)
 
 
-### 5. UTILITY PER PULIRE LO SCHERMO ###
-# Una semplice funzione che capisce se sei su Windows o Linux/Mac
-# e lancia il comando giusto per pulire tutto il terminale all'inizio.
 def clear_screen():
-    if os.name == "nt":
-        os.system("cls")  # Windows
-    else:
-        os.system("clear")  # Linux
+    """Pulisce il terminale in modo cross-platform (Windows/Unix)."""
+    os.system("cls" if os.name == "nt" else "clear")
 
 
-### 6. IL THREAD AUTOMATICO (Il "Motore" nascosto) ###
-# Questa funzione girerà in parallelo al programma principale.
-# Simula la vita reale: auto che arrivano e partono da sole.
+# ==============================================================================
+# LOGICA DI SIMULAZIONE (BACKGROUND WORKERS)
+# ==============================================================================
 
 
-def flusso_automatico(x):  # DA RIVEDERE
+def thread_zona_individuale(zona):
+    """
+    Funzione Worker eseguita da ogni Thread indipendente.
+    Simula il comportamento autonomo di una singola zona di parcheggio.
+    """
     while True:
-        # Aspetta un tempo casuale tra 0.5 e 2 secondi
-        time.sleep(random.uniform(0.5, 2.0))
+        # 1. Simulazione temporale non deterministica
+        # Ogni zona "vive" con i propri ritmi, indipendentemente dalle altre.
+        attesa = random.uniform(2.0, 5.0)
+        time.sleep(attesa)
 
-        # Tira una moneta (o quasi): genera un numero da 0 a 100
+        # 2. Generazione evento casuale (Business Logic simulata)
         evento = random.randint(0, 100)
 
-        if evento < 40:  # 40% di probabilità di parcheggiare
-            x.park()
-        elif 40 <= evento < 60:  # 20% di probabilità di uscire
-            x.unpark()
+        # Logica probabilistica:
+        # 0-39%  -> Arrivo auto (Park)
+        # 40-79% -> Partenza auto (Unpark)
+        # 80-100%-> Nessun evento (Idle)
+        if evento < 40:
+            zona.park()
+        elif 40 <= evento < 80:
+            zona.unpark()
 
-        # Importante: dopo che il computer ha mosso le auto, aggiorna la grafica
-        update_header_only()
-
-
-### 7. AVVIO DEL PROGRAMMA ###
-# Qui prepariamo il terreno prima di entrare nel ciclo infinito.
-clear_screen()
-print("\n")  # Lasciamo una riga vuota in alto per l'header
-print("Simulazione avviata. Scrivi i comandi sotto (es. 'park a').\n")
-
-# Configuriamo il thread
-simulazione_thread = threading.Thread(target=flusso_automatico, args=(a,))
-simulazione_thread2 = threading.Thread(target=flusso_automatico, args=(b,))
-simulazione_thread3 = threading.Thread(target=flusso_automatico, args=(c,))
-
-# daemon = True significa: "Se l'utente chiude il programma principale,
-# tu (thread) devi morire subito, non restare attivo in background".
-simulazione_thread.daemon = True
-simulazione_thread2.daemon = True
-simulazione_thread3.daemon = True
-simulazione_thread.start()  # Via!
-simulazione_thread2.start()  # Via!
-simulazione_thread3.start()  # Via!
+        # 3. Aggiornamento UI Thread-Safe
+        # Acquisiamo il lock globale dello schermo per aggiornare la dashboard.
+        # Se l'utente sta scrivendo o un altro thread sta aggiornando, aspettiamo qui.
+        with screen_lock:
+            update_header()
 
 
-### 8. LOOP PRINCIPALE (Interazione Utente) ###
-# Questa parte gestisce l'input della tastiera.
-# Deve essere robusta contro errori di digitazione.
-mappa_zone = {"a": a, "b": b, "c": c}  # Collega la lettera "a" all'oggetto a
+# ==============================================================================
+# MAIN ENTRY POINT
+# ==============================================================================
 
-while True:
-    try:
-        # Chiediamo l'input. .strip() toglie spazi vuoti, .lower() rende tutto minuscolo
-        comando_input = input("Inserisci comando: ").strip().lower()
-    except EOFError:
-        break  # Se premo Ctrl+D esce
+if __name__ == "__main__":
+    # Setup iniziale dell'ambiente grafico
+    clear_screen()
+    print(
+        "\n\nSimulazione Multi-Thread UniPark avviata.\nOgni zona è gestita da un processo indipendente.\n"
+    )
 
-    if not comando_input:
-        continue  # Se premo invio a vuoto, ricomincia
+    # Primo rendering statico della dashboard
+    with screen_lock:
+        update_header()
 
-    # PULIZIA VISIVA INPUT:
-    # Appena premi invio, questa riga cancella quello che hai scritto
-    # per tenere il terminale pulito e mostrare solo il risultato.
-    # \033[A (Cursore su di 1 riga) + \033[K (Cancella riga)
-    print("\033[A\033[K", end="", flush=True)
+    # --- AVVIO CONCORRENZA ---
+    # Istanziamo un Thread separato per ogni zona.
+    # daemon=True: Questi thread sono "servitori". Se il programma principale
+    # (Main Thread) termina, questi thread vengono uccisi immediatamente dal SO.
+    t_a = threading.Thread(target=thread_zona_individuale, args=(a,), daemon=True)
+    t_b = threading.Thread(target=thread_zona_individuale, args=(b,), daemon=True)
+    t_c = threading.Thread(target=thread_zona_individuale, args=(c,), daemon=True)
 
-    if comando_input == "exit":
-        break
+    t_a.start()
+    t_b.start()
+    t_c.start()
 
-    parti = comando_input.split()  # Divide la frase in parole
+    # --- EVENT LOOP PRINCIPALE (Input Utente) ---
+    while True:
+        try:
+            # Input bloccante: il programma aspetta qui l'utente.
+            # I thread in background continuano a girare mentre siamo fermi qui.
+            cmd = input("Comando (es. 'park a') > ").strip().lower()
 
-    # Controllo se ho scritto due parole (es. "park" e "a")
-    if len(parti) != 2:
-        # \r riporta il cursore a inizio riga per sovrascrivere
-        print(
-            "\r⚠️  Formato errato! Usa: 'azione zona' (es. park a)", end="", flush=True
-        )
-        time.sleep(0.5)
-        print("\r\033[K", end="", flush=True)  # Cancella l'errore dopo 0.5s
-        continue
+            # Appena ricevuto l'input, puliamo la riga per mantenere la UI pulita.
+            with screen_lock:
+                # \033[A (Cursore su di 1) + \033[2K (Cancella riga)
+                print("\033[A\033[2K", end="", flush=True)
 
-    azione, nome_zona = parti[0], parti[1]
+            # Gestione uscita graceful
+            if cmd == "exit":
+                break
 
-    # Logica di controllo comandi
-    if nome_zona in mappa_zone:
-        zona = mappa_zone[nome_zona]
+            # Gestione input vuoto (utente preme solo Invio)
+            if not cmd:
+                continue
 
-        if azione == "park":
+            # Parsing del comando
+            parts = cmd.split()
+            if len(parts) != 2:
+                # Feedback errore temporaneo
+                with screen_lock:
+                    print(f"\r❌ Formato errato!", end="", flush=True)
+                    time.sleep(1)
+                    print(f"\r\033[2K", end="", flush=True)  # Cancella msg errore
+                continue
 
-            esito = zona.park()
+            azione, zona_key = parts[0], parts[1]
 
-            esito = zona.park()  # Proviamo a parcheggiare
+            # Validazione zona
+            if zona_key not in mappa_zone:
+                with screen_lock:
+                    print(f"\r❌ Zona inesistente", end="", flush=True)
+                    time.sleep(1)
+                    print(f"\r\033[2K", end="", flush=True)
+                continue
 
-            if esito:
-                print(
-                    f"\r✅ Comando: PARK su {zona.name} (parcheggiato)",
-                    end="",
-                    flush=True,
+            target_zone = mappa_zone[zona_key]
+
+            # Esecuzione logica comando manuale
+            msg = ""
+            if azione == "park":
+                ok = target_zone.park()
+                msg = (
+                    f"✅ Manuale: Park in {target_zone.name}"
+                    if ok
+                    else f"⚠️ {target_zone.name} PIENO!"
+                )
+            elif azione == "unpark":
+                ok = target_zone.unpark()
+                msg = (
+                    f"✅ Manuale: Unpark da {target_zone.name}"
+                    if ok
+                    else f"❌ {target_zone.name} vuoto!"
                 )
             else:
-                print(
-                    f"\r⚠️  Parcheggio PIENO su {zona.name}, aggiunto in coda!",
-                    end="",
-                    flush=True,
-                )
+                msg = "❌ Azione ignota"
 
-            time.sleep(0.5)  # Lascia leggere il messaggio
-            print("\r\033[K", end="", flush=True)  # Pulisce la riga
+            # Rendering Feedback Utente + Aggiornamento Immediato Dashboard
+            with screen_lock:
+                print(f"\r{msg}", end="", flush=True)
+                update_header()
 
-        elif azione == "unpark":
-            esito = zona.unpark()
-            if esito:
-                print(
-                    f"\r✅ Comando: UNPARK su {zona.name} (liberato)",
-                    end="",
-                    flush=True,
-                )
-            else:
-                print(f"\r❌ Parcheggio già VUOTO su {zona.name}!", end="", flush=True)
-
+            # Mantieni il feedback visibile per 0.5 secondi
             time.sleep(0.5)
-            print("\r\033[K", end="", flush=True)
 
-        else:
-            print(f"\r❌ Azione '{azione}' non valida!", end="", flush=True)
-            time.sleep(0.5)
-            print("\r\033[K", end="", flush=True)
+            # Cleanup finale della riga di feedback
+            with screen_lock:
+                print(f"\r\033[2K", end="", flush=True)
 
-        # Aggiorniamo subito l'header per dare un feedback immediato all'utente
-        update_header_only()
-
-    else:
-        print(f"\r❌ Zona '{nome_zona}' inesistente!", end="", flush=True)
-        time.sleep(0.5)
-        print("\r\033[K", end="", flush=True)
+        except KeyboardInterrupt:
+            # Gestione Ctrl+C per uscita pulita
+            break
