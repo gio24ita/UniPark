@@ -215,9 +215,9 @@ if __name__ == "__main__":
             if len(parts) != 2:
                 # Feedback errore temporaneo
                 with screen_lock:
-                    print(f"\r❌ Formato errato!", end="", flush=True)
+                    print("\r❌ Formato errato!", end="", flush=True)
                     time.sleep(1)
-                    print(f"\r\033[2K", end="", flush=True)  # Cancella msg errore
+                    print("\r\033[2K", end="", flush=True)  # Cancella msg errore
                 continue
 
             azione, zona_key = parts[0], parts[1]
@@ -266,5 +266,3 @@ if __name__ == "__main__":
         except KeyboardInterrupt:
             # Gestione Ctrl+C per uscita pulita
             break
-
-# fix: trigger pipeline
