@@ -253,7 +253,7 @@ if __name__ == "__main__":
 
             # Rendering Feedback Utente + Aggiornamento Immediato Dashboard
             with screen_lock:
-                print("\r{msg}", end="", flush=True)
+                print(f"\r{msg}", end="", flush=True)
                 update_header()
 
             # Mantieni il feedback visibile per 0.5 secondi
