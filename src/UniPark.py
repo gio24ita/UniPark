@@ -354,7 +354,7 @@ class UniParkSystem:
             except KeyboardInterrupt:
                 self.running = False
                 break
-            except Exception:
+            except Exception:  # pylint: disable=broad-exception-caught
                 # Gestione robusta errori per non crashare l'intera simulazione
                 self.reset_prompt()
 
