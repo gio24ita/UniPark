@@ -28,34 +28,39 @@ class ParkingZone:
         else:
             self.free_slots = free_slots
 
+        self.waiting = 0  # Contatore per la lunghezza della coda d'attesa
+        self.lock = threading.Lock()
+
+    def park(self):
+        """Tenta di parcheggiare: se posto libero, parcheggia; altrimenti, aggiunge alla coda."""
+        with self.lock:
+            if self.free_slots > 0:
+                self.free_slots -= 1
+                return True  # Parcheggiato con successo
+
+            self.waiting += 1
+            return False  # Aggiunto alla coda
+
+    def unpark(self):
+        """Libera un posto: se possibile, libera e poi parcheggia il primo in coda se presente."""
+        with self.lock:
+            if self.free_slots < self.capacity:
+                self.free_slots += 1
+                # Controlla se c'è qualcuno in coda
+                if self.waiting > 0:
+                    self.waiting -= 1
+                    self.free_slots -= 1  # Parcheggia il primo in coda
+                return True
+            return False
+
+    def get_status(self):
+        """Restituisce lo stato attuale: posti liberi/capacità (in coda)."""
+
         # IL LOCK (LUCCHETTO):
         # È fondamentale nel multithreading. Immaginalo come la chiave del bagno.
         # Solo chi ha la chiave (thread automatico o utente) può entrare,
         # modificare i posti e poi uscire restituendo la chiave.
         self.lock = threading.Lock()
-
-    def park(self):
-        # 'with self.lock' acquisisce la chiave. Se è occupata, aspetta qui in fila.
-        with self.lock:
-            if self.free_slots > 0:
-                self.free_slots -= 1
-                return True  # Parcheggio riuscito
-
-            return False  # Parcheggio pieno
-
-    def unpark(self):
-        with self.lock:  # Anche qui serve la chiave per evitare conflitti
-            if self.free_slots < self.capacity:
-                self.free_slots += 1
-                return True  # Uscita riuscita
-
-            return False  # Il parcheggio era già vuoto
-
-    def get_status(self):
-        # Anche solo per leggere il numero serve il lock, per evitare di leggere
-        # un numero mentre sta venendo modificato (es. lettura "sporca").
-        with self.lock:
-            return f"{self.free_slots}/{self.capacity}"
 
 
 ### 3. CREAZIONE DELLE ZONE (Oggetti Globali) ###
@@ -73,12 +78,28 @@ c = ParkingZone("Zona C", 80, random.randint(1, 80))
 def update_header_only():
     """Aggiorna solo la riga in alto."""
 
+    # Nota: spezziamo la riga lunga per Pylint
+
     # Prepariamo il testo. :02d significa "formatta il numero con almeno 2 cifre" (es. 05)
+
     status_text = (
-        f"--- STATO LIVE: A:{a.free_slots:02d} | "
-        f"B:{b.free_slots:02d} | C:{c.free_slots:02d} ---"
+        f"--- STATO LIVE: A:{a.free_slots:02d}/{a.capacity} Q:{a.waiting:02d} | "
+        f"B:{b.free_slots:02d}/{b.capacity} Q:{b.waiting:02d} | "
+        f"C:{c.free_slots:02d}/{c.capacity} Q:{c.waiting:02d} ---"
     )
 
+    # Stampiamo la stringa usando i codici ANSI
+    print(
+        f"\033[s"  # Salva posizione cursore
+        f"\033[1;1H"  # Sposta a riga 1, colonna 1
+        f"\033[2K"  # Cancella riga
+        f"\033[1;36m"  # Colore ciano
+        f"{status_text}"  # Testo
+        f"\033[0m"  # Reset colore
+        f"\033[u",  # Ripristina cursore
+        end="",
+        flush=True,
+    )
     # SPIEGAZIONE CODICI ANSI:
     # \033[s    -> SALVA la posizione del cursore (dove stai scrivendo ora)
     # \033[1;1H -> VAI alla riga 1, colonna 1 (angolo in alto a sinistra)
@@ -189,11 +210,23 @@ while True:
         zona = mappa_zone[nome_zona]
 
         if azione == "park":
+
+            esito = zona.park()
+
             esito = zona.park()  # Proviamo a parcheggiare
+
             if esito:
-                print(f"\r✅ Comando: PARK su {zona.name}", end="", flush=True)
+                print(
+                    f"\r✅ Comando: PARK su {zona.name} (parcheggiato)",
+                    end="",
+                    flush=True,
+                )
             else:
-                print(f"\r❌ Parcheggio PIENO su {zona.name}!", end="", flush=True)
+                print(
+                    f"\r⚠️  Parcheggio PIENO su {zona.name}, aggiunto in coda!",
+                    end="",
+                    flush=True,
+                )
 
             time.sleep(0.5)  # Lascia leggere il messaggio
             print("\r\033[K", end="", flush=True)  # Pulisce la riga
@@ -201,7 +234,11 @@ while True:
         elif azione == "unpark":
             esito = zona.unpark()
             if esito:
-                print(f"\r✅ Comando: UNPARK su {zona.name}", end="", flush=True)
+                print(
+                    f"\r✅ Comando: UNPARK su {zona.name} (liberato)",
+                    end="",
+                    flush=True,
+                )
             else:
                 print(f"\r❌ Parcheggio già VUOTO su {zona.name}!", end="", flush=True)
 
