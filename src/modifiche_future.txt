@@ -1,2 +1,3 @@
 implementare un thread per ogni zona, in modo che la simulazione sia più realistica
-Test definitivo token funzionante
+
+nella Classe: "class UniParkSystem:" nell funzione: "def print_live_dashboard(self):" modificare il numero da 95 a 99.
