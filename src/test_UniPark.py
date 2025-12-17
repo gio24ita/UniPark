@@ -1,6 +1,5 @@
 # pylint: disable=redefined-outer-name
 import sys
-
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -67,6 +66,7 @@ def test_status_dict():
     assert data["rate"] == 50.0
     assert data["name"] == "Data"
 
+
 # ==================== TEST SISTEMA & UI (UniParkSystem) ====================
 
 
@@ -129,7 +129,7 @@ def test_start_interaction_simulation(park_system):
     """
     Testa il ciclo principale start() simulando un utente che scrive.
     """
-    # Sequenza di tasti simulata: scrive "park a", preme Invio, exit.
+    # Sequenza di tasti simulata: scrive "park a", preme Invio, scrive "exit", preme Invio.
     input_sequence = list("park a\nexit\n")
 
     # W0612: Rimosso 'as mock_input' perché non utilizzato
