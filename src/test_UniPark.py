@@ -1,3 +1,4 @@
+# pylint: disable=redefined-outer-name
 import sys
 from unittest.mock import MagicMock, patch
 import pytest
@@ -66,7 +67,6 @@ def test_status_dict():
 def park_system():
     """
     Crea un'istanza pulita del sistema per ogni test.
-    Rinomina 'app' in 'park_system' per evitare W0621 (redefined-outer-name).
     """
     system = UniParkSystem()
     # Sostituiamo le zone random con zone fisse per prevedibilità
