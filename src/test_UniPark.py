@@ -193,3 +193,4 @@ def test_main_block_simulation():
     # Importiamo il file come modulo per vedere se ha le variabili giuste
     # L'import è stato spostato in alto per evitare C0415
     assert hasattr(UniPark, 'UniParkSystem')
+    
