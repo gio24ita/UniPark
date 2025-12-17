@@ -66,7 +66,6 @@ def test_status_dict():
     assert "rate" in data
     assert data["rate"] == 50.0
     assert data["name"] == "Data"
-    
 
 # ==================== TEST SISTEMA & UI (UniParkSystem) ====================
 
@@ -130,7 +129,7 @@ def test_start_interaction_simulation(park_system):
     """
     Testa il ciclo principale start() simulando un utente che scrive.
     """
-    # Sequenza di tasti simulata: scrive "park a", preme Invio, scrive "exit", preme Invio.
+    # Sequenza di tasti simulata: scrive "park a", preme Invio, exit.
     input_sequence = list("park a\nexit\n")
 
     # W0612: Rimosso 'as mock_input' perché non utilizzato
@@ -170,9 +169,7 @@ def test_windows_compatibility():
 
 
 def test_keyboard_interrupt_handling(park_system):
-    """
-    Testa se premiamo CTRL+C (KeyboardInterrupt) nel loop.
-    """
+    """Testa se premiamo CTRL+C (KeyboardInterrupt) nel loop."""
     with patch("sys.stdin.read", side_effect=KeyboardInterrupt):
         with patch("sys.stdout"):
             with patch("os.system"):
@@ -210,5 +207,4 @@ def test_main_block_simulation():
     Testa l'unica parte che non viene mai eseguita: if __name__ == "__main__"
     """
     # Importiamo il file come modulo per vedere se ha le variabili giuste
-    # L'import è stato spostato in alto per evitare C0415
     assert hasattr(UniPark, "UniParkSystem")
