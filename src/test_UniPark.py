@@ -2,9 +2,10 @@ import sys
 import threading
 from unittest.mock import MagicMock, patch
 
-import pytest # type: ignore
+import pytest  # type: ignore
 
 from UniPark import ParkingZone, UniParkSystem
+
 
 # ==================== TEST MODELLO (ParkingZone) ====================
 def test_zone_initialization():
@@ -62,6 +63,7 @@ def test_status_dict():
     assert data["rate"] == 50.0
     assert data["name"] == "Data"
 
+
 def test_start_interaction_simulation(app):
     """
     Testa il ciclo principale start() simulando un utente che scrive.
@@ -70,14 +72,14 @@ def test_start_interaction_simulation(app):
     # Sequenza di tasti simulata: scrive "park a", preme Invio, scrive "exit", preme Invio.
     # Usiamo side_effect per restituire un carattere alla volta come se l'utente digitasse.
     input_sequence = list("park a\nexit\n")
-    
+
     # Mockiamo tutto per non sporcare lo schermo e non bloccarci
-    with patch('sys.stdin.read', side_effect=input_sequence) as mock_input:
-        with patch('sys.stdout', new_callable=MagicMock): # Zittiamo le stampe
-            with patch('os.system'): # Zittiamo il clear screen
-                with patch('time.sleep'): # Zittiamo le attese
-                    with patch('threading.Thread'): # Non avviamo veri thread worker
-                        
+    with patch("sys.stdin.read", side_effect=input_sequence) as mock_input:
+        with patch("sys.stdout", new_callable=MagicMock):  # Zittiamo le stampe
+            with patch("os.system"):  # Zittiamo il clear screen
+                with patch("time.sleep"):  # Zittiamo le attese
+                    with patch("threading.Thread"):  # Non avviamo veri thread worker
+
                         # Lanciamo il main loop!
                         # Grazie alla sequenza "exit", il loop si chiuderà da solo.
                         app.start()
@@ -85,39 +87,42 @@ def test_start_interaction_simulation(app):
     # Se il test finisce senza bloccarsi, abbiamo coperto il loop principale!
     assert app.running is False
 
+
 def test_windows_compatibility():
     """
     Finge di essere su Windows per testare la funzione _read_char_windows.
     Fondamentale perché su Linux quelle righe verrebbero saltate (rosso nel coverage).
     """
     system = UniParkSystem()
-    
+
     # 1. Fingiamo di essere su Windows ('nt')
-    with patch('os.name', 'nt'):
+    with patch("os.name", "nt"):
         # 2. Creiamo un finto modulo msvcrt (che esiste solo su Windows)
         mock_msvcrt = MagicMock()
         # Simuliamo che l'utente prema 'a'
-        mock_msvcrt.getch.return_value = b'a'
-        
-        with patch.dict(sys.modules, {'msvcrt': mock_msvcrt}):
+        mock_msvcrt.getch.return_value = b"a"
+
+        with patch.dict(sys.modules, {"msvcrt": mock_msvcrt}):
             char = system._read_char_windows()
             assert char == "a"
 
             # Test tasto Invio speciale di Windows
-            mock_msvcrt.getch.return_value = b'\r'
+            mock_msvcrt.getch.return_value = b"\r"
             assert system._read_char_windows() == "\n"
+
 
 def test_keyboard_interrupt_handling(app):
     """Testa se premiamo CTRL+C (KeyboardInterrupt) nel loop."""
     # Simuliamo che appena proviamo a leggere un carattere, l'utente prema CTRL+C
-    with patch('sys.stdin.read', side_effect=KeyboardInterrupt):
-        with patch('sys.stdout'):
-            with patch('os.system'):
-                 with patch('threading.Thread'): 
+    with patch("sys.stdin.read", side_effect=KeyboardInterrupt):
+        with patch("sys.stdout"):
+            with patch("os.system"):
+                with patch("threading.Thread"):
                     app.start()
-    
+
     # Il programma deve uscire pulito mettendo running = False
     assert app.running is False
+
 
 def test_main_block_simulation():
     """
@@ -125,7 +130,9 @@ def test_main_block_simulation():
     """
     # Importiamo il file come modulo per vedere se ha le variabili giuste
     import UniPark
-    assert hasattr(UniPark, 'UniParkSystem')
+
+    assert hasattr(UniPark, "UniParkSystem")
+
 
 # ==================== TEST SISTEMA & UI (UniParkSystem) ====================
 @pytest.fixture
