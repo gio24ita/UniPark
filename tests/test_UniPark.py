@@ -71,8 +71,8 @@ def test_status_dict():
 # ==================== TEST SISTEMA (UniParkSystem) ====================
 
 
-@pytest.fixture
-def park_system():
+@pytest.fixture(name="park_system")
+def fixture_park_system():
     # Fixture che crea un'istanza pulita del sistema
     return UniParkSystem()
 
