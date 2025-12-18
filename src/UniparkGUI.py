@@ -22,6 +22,9 @@ class UniParkApp(tk.Tk):
         self.running = True
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
+        self.system = UniParkSystem()
+        self.zones = self.system.zones
+
         # --- Setup Stili ---
         self.setup_styles()
 
@@ -96,7 +99,7 @@ class UniParkApp(tk.Tk):
 
         self.zone_widgets = {}
 
-        for i, zone in enumerate(self.zones):
+        for zone in self.zones:
             # Card Frame
             card = tk.LabelFrame(
                 container,

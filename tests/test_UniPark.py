@@ -1,6 +1,7 @@
 # Unit Test Suite per UniPark.
 # Testa il Modello (Logic) e il Controller in isolamento.
-
+import os
+import sys
 import threading
 import time
 

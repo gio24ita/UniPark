@@ -81,3 +81,11 @@ class UniParkSystem:
         self.zone_map = {"a": self.zones[0], "b": self.zones[1], "c": self.zones[2]}
 
         self.running = True
+
+    def _zone_worker(self, zone):
+        """Placeholder per la logica del worker."""
+        pass
+
+    def get_total_capacity(self):
+        """Restituisce la capacità totale di tutto il sistema."""
+        return sum(z.capacity for z in self.zones)
