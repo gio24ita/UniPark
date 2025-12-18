@@ -82,10 +82,13 @@ class UniParkSystem:
 
         self.running = True
 
-    def _zone_worker(self, zone):
-        """Placeholder per la logica del worker."""
-        pass
-
     def get_total_capacity(self):
-        """Restituisce la capacità totale di tutto il sistema."""
+        # Restituisce la capacità totale di tutto il sistema
         return sum(z.capacity for z in self.zones)
+
+    def get_zone_by_name(self, name):
+        # Recupera una zona specifica tramite il suo nome identificativo
+        for zone in self.zones:
+            if zone.name == name:
+                return zone
+        return None

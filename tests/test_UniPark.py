@@ -1,7 +1,6 @@
 # Unit Test Suite per UniPark.
 # Testa il Modello (Logic) e il Controller in isolamento.
-import os
-import sys
+
 import threading
 import time
 
@@ -13,14 +12,14 @@ from UniPark import ParkingZone, UniParkSystem
 
 
 def test_zone_initialization():
-    """Verifica che la zona si inizializzi correttamente e corregga valori strani."""
+    # Verifica che la zona si inizializzi correttamente e corregga valori strani
     # Test valori normali
     z = ParkingZone("Test", 100, 50)
     assert z.free_slots == 50
     assert z.capacity == 100
     assert z.occupied_slots == 50
 
-    # Test valori sballati (Clamping)
+    # Test valori sballati
     z_over = ParkingZone("Over", 10, 20)  # 20 liberi su 10 posti?
     assert z_over.free_slots == 10  # Deve diventare 10
 
@@ -29,7 +28,7 @@ def test_zone_initialization():
 
 
 def test_park_logic():
-    """Testa entrata auto e gestione code."""
+    # Testa entrata auto e gestione code
     z = ParkingZone("Test", 10, 1)  # 1 posto libero
 
     # Primo parcheggio: successo
@@ -44,7 +43,7 @@ def test_park_logic():
 
 
 def test_unpark_logic():
-    """Testa uscita auto e scorrimento coda."""
+    # Testa uscita auto e scorrimento coda
     z = ParkingZone("Test", 10, 0)
     z.waiting = 5  # 5 in coda
 
@@ -74,22 +73,35 @@ def test_status_dict():
 
 @pytest.fixture
 def park_system():
-    """Fixture che crea un'istanza pulita del sistema."""
+    # Fixture che crea un'istanza pulita del sistema
     return UniParkSystem()
 
 
 def test_system_init(park_system):
-    """Verifica inizializzazione del controller."""
+    # Verifica inizializzazione del controller
     assert len(park_system.zones) == 3
     assert "a" in park_system.zone_map
     assert park_system.running is True
 
 
+def test_public_methods(park_system):
+    # Testa i metodi pubblici aggiunti per soddisfare pylint
+    # Test get_total_capacity
+    total_cap = park_system.get_total_capacity()
+    assert total_cap == 60 + 45 + 80
+
+    # Test get_zone_by_name
+    zone_a = park_system.zones[0]
+    found_zone = park_system.get_zone_by_name(zone_a.name)
+    assert found_zone == zone_a
+
+    assert park_system.get_zone_by_name("Inesistente") is None
+
+
 def test_concurrency_stress():
-    """
-    Test di stress multithread per verificare il Lock.
-    100 thread provano a parcheggiare contemporaneamente su 100 posti.
-    """
+    # Test di stress multithread per verificare il Lock.
+    # 100 thread provano a parcheggiare contemporaneamente su 100 posti.
+
     z = ParkingZone("Stress", 100, 100)  # 100 posti liberi
     threads = []
 
