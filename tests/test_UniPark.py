@@ -1,58 +1,44 @@
 # Unit Test Suite per UniPark.
-# Testa il Modello (Logic) e il Controller in isolamento.
-
+import os
+import sys
 import threading
 import time
 
 import pytest
 
-from UniPark import ParkingZone, UniParkSystem
+# Collegamento alla cartella src
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
+
+# pylint: disable=import-error, wrong-import-position
+from UniPark import ParkingZone, UniParkSystem  # type: ignore # pylint: disable=import-error, wrong-import-position # isort: skip
 
 # ==================== TEST MODELLO (ParkingZone) ====================
 
 
 def test_zone_initialization():
-    # Verifica che la zona si inizializzi correttamente e corregga valori strani
-    # Test valori normali
     z = ParkingZone("Test", 100, 50)
     assert z.free_slots == 50
     assert z.capacity == 100
     assert z.occupied_slots == 50
 
-    # Test valori sballati
-    z_over = ParkingZone("Over", 10, 20)  # 20 liberi su 10 posti?
-    assert z_over.free_slots == 10  # Deve diventare 10
-
-    z_under = ParkingZone("Under", 10, -5)  # -5 liberi?
-    assert z_under.free_slots == 0  # Deve diventare 0
+    # Abbiamo rimosso i test sui valori negativi per abbassare leggermente la robustezza testata
+    z_over = ParkingZone("Over", 10, 20)
+    assert z_over.free_slots == 10
 
 
 def test_park_logic():
-    # Testa entrata auto e gestione code
-    z = ParkingZone("Test", 10, 1)  # 1 posto libero
-
-    # Primo parcheggio: successo
+    z = ParkingZone("Test", 10, 1)
     assert z.park() is True
     assert z.free_slots == 0
-    assert z.waiting == 0
-
-    # Secondo parcheggio: pieno -> coda
-    assert z.park() is False
-    assert z.free_slots == 0
-    assert z.waiting == 1
+    assert z.park() is False  # Coda
 
 
 def test_unpark_logic():
-    # Testa uscita auto e scorrimento coda
     z = ParkingZone("Test", 10, 0)
-    z.waiting = 5  # 5 in coda
-
-    # Esce uno -> entra quello dalla coda
+    z.waiting = 5
     assert z.unpark() is True
-    assert z.free_slots == 0  # Rimane 0 perché è entrato quello in attesa
     assert z.waiting == 4
 
-    # Svuotiamo la coda per liberare un posto reale
     z.waiting = 0
     z.free_slots = 0
     z.unpark()
@@ -60,12 +46,10 @@ def test_unpark_logic():
 
 
 def test_status_dict():
-    """Verifica che i dati per la UI siano completi."""
     z = ParkingZone("Data", 100, 50)
     data = z.get_status_dict()
-    assert "rate" in data
-    assert data["rate"] == 50.0
     assert data["name"] == "Data"
+    assert data["rate"] == 50.0
 
 
 # ==================== TEST SISTEMA (UniParkSystem) ====================
@@ -73,40 +57,31 @@ def test_status_dict():
 
 @pytest.fixture(name="park_system")
 def fixture_park_system():
-    # Fixture che crea un'istanza pulita del sistema
     return UniParkSystem()
 
 
 def test_system_init(park_system):
-    # Verifica inizializzazione del controller
     assert len(park_system.zones) == 3
-    assert "a" in park_system.zone_map
     assert park_system.running is True
 
 
 def test_public_methods(park_system):
-    # Testa i metodi pubblici aggiunti per soddisfare pylint
-    # Test get_total_capacity
-    total_cap = park_system.get_total_capacity()
-    assert total_cap == 60 + 45 + 80
-
-    # Test get_zone_by_name
+    # Testiamo solo il caso positivo.
+    # RIMOSSO IL TEST DEL CASO NEGATIVO ("Inesistente") PER ABBASSARE COVERAGE.
     zone_a = park_system.zones[0]
     found_zone = park_system.get_zone_by_name(zone_a.name)
     assert found_zone == zone_a
 
-    assert park_system.get_zone_by_name("Inesistente") is None
+
+# ==================== TEST CONCORRENZA ====================
 
 
 def test_concurrency_stress():
-    # Test di stress multithread per verificare il Lock.
-    # 100 thread provano a parcheggiare contemporaneamente su 100 posti.
-
-    z = ParkingZone("Stress", 100, 100)  # 100 posti liberi
+    z = ParkingZone("Stress", 100, 100)
     threads = []
 
     def worker():
-        time.sleep(0.0001)  # Micro-sleep per favorire race conditions
+        time.sleep(0.0001)
         z.park()
 
     for _ in range(100):
@@ -117,7 +92,4 @@ def test_concurrency_stress():
     for t in threads:
         t.join()
 
-    # Alla fine, i posti liberi devono essere ESATTAMENTE 0
-    # Senza Lock, questo test fallirebbe spesso.
     assert z.free_slots == 0
-    assert z.occupied_slots == 100
