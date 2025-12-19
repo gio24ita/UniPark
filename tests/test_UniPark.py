@@ -9,7 +9,9 @@ import pytest
 # Collegamento alla cartella src
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
-from UniPark import ParkingZone, UniParkSystem  # type: ignore # pylint: disable=import-error, wrong-import-position
+# pylint: disable=import-error, wrong-import-position
+from UniPark import (  # type: ignore # pylint: disable=import-error, wrong-import-position
+    ParkingZone, UniParkSystem)
 
 # ==================== TEST MODELLO (ParkingZone) ====================
 
