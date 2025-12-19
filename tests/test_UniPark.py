@@ -10,8 +10,7 @@ import pytest
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../src")))
 
 # pylint: disable=import-error, wrong-import-position
-from UniPark import (  # type: ignore # pylint: disable=import-error, wrong-import-position
-    ParkingZone, UniParkSystem)
+from UniPark import ParkingZone, UniParkSystem  # type: ignore # pylint: disable=import-error, wrong-import-position # isort: skip
 
 # ==================== TEST MODELLO (ParkingZone) ====================
 

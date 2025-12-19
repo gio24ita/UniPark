@@ -5,8 +5,8 @@ import tkinter as tk
 from tkinter import messagebox, scrolledtext, ttk
 
 # IMPORTIAMO LA LOGICA DAL MODELLO
-from UniPark import \
-    UniParkSystem  # type: ignore # pylint: disable=import-error
+# IMPORTIAMO LA LOGICA DAL MODELLO
+from UniPark import UniParkSystem  # type: ignore # pylint: disable=import-error # isort: skip
 
 
 class UniParkApp(tk.Tk):
