@@ -10,9 +10,8 @@ from threading import Lock
 class ParkingZone:
     # Modello che gestisce i dati del singolo parcheggio in modo Thread-Safe
 
-    # Rappresenta una zona di parcheggio
-    # Implementa un meccanismo di locking per garantire l'accesso thread-safe agli attributi condivisi (free_slots, waiting)
     def __init__(self, name, capacity, free_slots):
+        # Implementa un meccanismo di locking per garantire l'accesso thread-safe agli attributi condivisi (free_slots, waiting)
         self.name = name
         self.capacity = capacity
         self.free_slots = max(0, min(free_slots, capacity))
@@ -24,13 +23,13 @@ class ParkingZone:
         # Calcola i posti occupati
         return self.capacity - self.free_slots
 
-    @property
+    @property  # Percentuale di saturazione rispetto alla capacità totale
     def occupancy_rate(self):
         # Calcola la percentuale di occupazione
         return (self.occupied_slots / self.capacity) * 100
 
     def park(self):
-        # Tenta di parcheggiare un'auto
+        # Tenta l'ingresso: se pieno, incrementa la coda di attesa
         with self.lock:
             if self.free_slots > 0:
                 self.free_slots -= 1
@@ -39,7 +38,7 @@ class ParkingZone:
             return False
 
     def unpark(self):
-        # Tenta di far uscire un'auto
+        # Gestisce l'uscita: se c'è attesa, libera un utente in coda, altrimenti libera un posto
         with self.lock:
             if self.waiting > 0:
                 self.waiting -= 1
@@ -72,14 +71,15 @@ class UniParkSystem:
     # Questa classe è fondamentale per i test e per inizializzare la GUI
 
     def __init__(self):
+        # Inizializzazione dei dati simulati (random) per le zone di parcheggio
         self.zones = [
             ParkingZone("Zona A (Viale A. Doria)", 60, random.randint(20, 60)),
             ParkingZone("Zona B (DMI)", 45, random.randint(15, 45)),
             ParkingZone("Zona C (Via S. Sofia)", 80, random.randint(30, 80)),
         ]
 
+        # Mapping rapido per l'accesso tramite identificativo testuale
         self.zone_map = {"a": self.zones[0], "b": self.zones[1], "c": self.zones[2]}
-
         self.running = True
 
     def get_total_capacity(self):
