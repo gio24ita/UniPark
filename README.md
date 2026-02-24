@@ -159,7 +159,7 @@ ci: modifiche alla pipeline
 
 ##  Autori
 
-Progetto universitario sviluppato per il corso **QD 2025/2026** — Università degli Studi di Catania.
+Progetto universitario sviluppato da Giovanni Pinelli, Liborio Pasqualino, Giovanni Tarpini e Damiano Nania per il corso **QD 2025/2026** — Università degli Studi di Catania.
 
 ---
 
