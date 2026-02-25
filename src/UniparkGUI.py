@@ -1,312 +1,370 @@
+# Modulo UniParkGUI: Interfaccia di controllo e monitoraggio in tempo reale.
+# Questo file gestisce la Dashboard grafica (Tkinter), la visualizzazione HUD 
+# dei parcheggi e la simulazione dei flussi di traffico tramite multithreading.
+
+import os
+import sys
 import random
 import threading
 import time
+from datetime import datetime
 import tkinter as tk
 from tkinter import messagebox, scrolledtext, ttk
 
-# IMPORTIAMO LA LOGICA DAL MODELLO
-# IMPORTIAMO LA LOGICA DAL MODELLO
-from UniPark import UniParkSystem  # type: ignore # pylint: disable=import-error # isort: skip
+# ==================== INTERFACCIA GRAFICA (UI) ====================
+
+# Importiamo il core logico. Se UniPark.py non esiste, l'app si chiude con un errore.
+try:
+    from UniPark import UniParkSystem
+except ImportError:
+    messagebox.showerror("Errore", "File UniPark.py non trovato. Assicurati che sia nella stessa cartella.")
+    sys.exit(1)
 
 
 class UniParkApp(tk.Tk):
     def __init__(self):
         super().__init__()
 
-        # --- Configurazione Finestra ---
-        self.title("UniPark Dashboard - Control Center")
-        self.geometry("950x700")
-        self.configure(bg="#f0f2f5")  # Sfondo (Light Grey)
-        self.resizable(True, True)
-
-        # Gestione chiusura
+        # --- Configurazione Finestra (PANNELLO FISSO BLINDATO) ---
+        # Impostiamo una dimensione fissa (1280x800) per garantire che i badge 
+        # sulla mappa siano sempre perfettamente allineati all'immagine satellitare.
+        self.title("UniPark - Intelligent Parking Management")
+        self.geometry("1280x800")
+        self.resizable(False, False) 
+        
+        # Blocchiamo fisicamente i limiti della finestra per evitare lo Snap Assist di Windows
+        self.maxsize(1280, 800)
+        self.minsize(1280, 800)
+        
+        # Inizializziamo colori e configurazione base
+        self.set_theme_colors()
+        self.configure(bg=self.colors["bg_app"])
         self.running = True
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
+        # Inizializziamo il sistema logico (il Model/Controller)
         self.system = UniParkSystem()
         self.zones = self.system.zones
+        
+        # Questa variabile tiene traccia della zona occupata manualmente dall'utente
+        self.user_parked_zone = None 
 
-        # --- Setup Stili ---
-        self.setup_styles()
-
-        # --- Costruzione Layout ---
-        self.create_header()
-        self.create_dashboard_area()
-        self.create_log_area()
-
-        # --- Avvio Thread ---
-        self.start_background_workers()
-
-        # --- Avvio Loop UI ---
-        self.update_ui_loop()
-
-    def setup_styles(self):
-        style = ttk.Style()
-        style.theme_use("clam")
-
-        # Colori
-        self.colors = {
-            "primary": "#2c3e50",  # Blu scuro
-            "success": "#27ae60",  # Verde
-            "warning": "#f39c12",  # Arancione
-            "danger": "#c0392b",  # Rosso
-            "bg": "#f0f2f5",  # Grigio sfondo
-            "card": "#ffffff",  # Bianco schede
+        # Coordinate in pixel calibrate sull'immagine 1280x800
+        self.map_coords = {
+            "Zona A (Viale A. Doria)": (700, 100),  
+            "Zona B (DMI)": (620, 430),             
+            "Zona C (Via S. Sofia)": (160, 520)     
         }
 
-        # Stile Card
-        style.configure(
-            "Card.TFrame",
-            background=self.colors["card"],
-            relief="raised",
-            borderwidth=1,
-        )
+        # --- SINCRONIZZAZIONE ORARIO INIZIALE ---
+        # All'avvio leggiamo l'ora reale e popoliamo i parcheggi di conseguenza
+        _, prob_park = self.get_time_phase()
+        for zone in self.zones:
+            target_occ = (prob_park / 100.0) + random.uniform(-0.05, 0.05)
+            target_occ = max(0.02, min(0.98, target_occ)) 
+            with zone.lock:
+                zone.free_slots = int(zone.capacity * (1.0 - target_occ))
+                zone.waiting = 0
 
-        # Stile Progress Bars colorate
-        style.configure(
-            "Green.Horizontal.TProgressbar",
-            background=self.colors["success"],
-            troughcolor="#ecf0f1",
-        )
-        style.configure(
-            "Orange.Horizontal.TProgressbar",
-            background=self.colors["warning"],
-            troughcolor="#ecf0f1",
-        )
-        style.configure(
-            "Red.Horizontal.TProgressbar",
-            background=self.colors["danger"],
-            troughcolor="#ecf0f1",
-        )
+        # Creiamo lo scheletro dell'interfaccia
+        self.setup_styles()
+        self.create_header()
+        self.setup_main_layout()
+        
+        # Avviamo i thread per il traffico simulato e il loop di aggiornamento UI
+        self.start_background_workers()
+        self.update_ui_loop()
+
+    def get_time_phase(self):
+        """Calcola la fase attuale basata sull'orologio di sistema e imposta la probabilità di sosta."""
+        hour = datetime.now().hour
+        if 8 <= hour < 14:
+            return "PICCO MATTUTINO", 85        # Molte auto in entrata
+        elif 14 <= hour < 16:
+            return "TRAFFICO POMERIDIANO", 55   # Situazione stabile
+        elif 16 <= hour < 19:
+            return "DEFLUSSO POMERIDIANO", 25   # Le auto iniziano a uscire
+        elif 19 <= hour < 22:
+            return "SVUOTAMENTO SERALE", 10     # Parcheggi quasi deserti
+        else:
+            return "FASCIA NOTTURNA", 2         # Nessuna attività
+
+    def set_theme_colors(self):
+        """Palette colori centrale dell'applicazione per facilitare future modifiche al tema."""
+        self.colors = {
+            "bg_app": "#0A0A0E",          
+            "bg_panel": "#141419",        
+            "bg_header": "#0F0F14",       
+            "border_color": "#2A2A35",    
+            "text_primary": "#FFFFFF",    
+            "text_secondary": "#A0A0B5",  
+            "accent_green": "#00E676",    
+            "accent_orange": "#FF9100",   
+            "accent_red": "#FF1744",      
+            "accent_cyan": "#00E5FF",     
+            "log_bg": "#050508",          
+            "btn_disabled": "#22222A",    
+            "log_in": "#4ADE80",          
+            "log_out": "#94A3B8"          
+        }
+
+    def setup_styles(self):
+        """Configura l'aspetto visivo dei widget moderni (ttk)."""
+        style = ttk.Style()
+        style.theme_use('clam') 
+        
+        style.configure("Card.TLabelframe", background=self.colors["bg_panel"], bordercolor=self.colors["border_color"], relief="solid", borderwidth=1)
+        style.configure("Card.TLabelframe.Label", background=self.colors["bg_panel"], foreground=self.colors["accent_cyan"], font=("Segoe UI", 12, "bold"))
+
+        style.configure("TProgressbar", thickness=6, troughcolor="#22222A", borderwidth=0)
+        style.configure("Green.Horizontal.TProgressbar", background=self.colors["accent_green"])
+        style.configure("Orange.Horizontal.TProgressbar", background=self.colors["accent_orange"])
+        style.configure("Red.Horizontal.TProgressbar", background=self.colors["accent_red"])
 
     def create_header(self):
-        # Header superiore
-        header_frame = tk.Frame(self, bg=self.colors["primary"], height=70)
+        """Costruisce la barra superiore con titolo, orologio e fase traffico."""
+        header_frame = tk.Frame(self, bg=self.colors["bg_header"], height=90, bd=1, relief="solid", highlightbackground=self.colors["border_color"], highlightthickness=1)
         header_frame.pack(fill="x", side="top")
 
-        title = tk.Label(
-            header_frame,
-            text="🅿️ UNIPARK CONTROL CENTER",
-            font=("Segoe UI", 20, "bold"),
-            bg=self.colors["primary"],
-            fg="white",
-        )
-        title.pack(pady=15)
+        # TITOLO (FONT 28) E SOTTOTITOLO
+        title_container = tk.Frame(header_frame, bg=self.colors["bg_header"])
+        title_container.pack(side=tk.LEFT, padx=25, pady=10)
+        
+        tk.Label(title_container, text="UNIPARK CONTROL CENTER", font=("Segoe UI", 28, "bold"), bg=self.colors["bg_header"], fg=self.colors["text_primary"]).pack(anchor="w")
+        tk.Label(title_container, text="Sistema di Gestione Flussi e Parcheggi Intelligente", font=("Segoe UI", 11), bg=self.colors["bg_header"], fg=self.colors["text_secondary"]).pack(anchor="w")
 
-    def create_dashboard_area(self):
-        # Crea le schede per ogni zona
-        container = tk.Frame(self, bg=self.colors["bg"])
-        container.pack(fill="both", expand=True, padx=20, pady=20)
+        # OROLOGIO E FASE
+        time_container = tk.Frame(header_frame, bg=self.colors["bg_header"])
+        time_container.pack(side=tk.RIGHT, padx=25, pady=10)
+
+        self.clock_label = tk.Label(time_container, text="00:00:00", font=("Consolas", 24, "bold"), bg=self.colors["bg_header"], fg=self.colors["text_primary"])
+        self.clock_label.pack(anchor="e")
+        
+        self.phase_label = tk.Label(time_container, text="[ FASE TRAFFICO ]", font=("Segoe UI", 12, "bold"), bg=self.colors["bg_header"], fg=self.colors["accent_cyan"])
+        self.phase_label.pack(anchor="e")
+
+    def setup_main_layout(self):
+        """Organizza lo spazio principale in Mappa (Sinistra) e Dashboard (Destra)."""
+        main_container = tk.Frame(self, bg=self.colors["bg_app"])
+        main_container.pack(fill="both", expand=True, padx=10, pady=10)
+
+        # --- PANNELLO MAPPA (Sinistra) ---
+        map_panel = tk.Frame(main_container, bg=self.colors["bg_panel"], bd=1, relief="solid", highlightbackground=self.colors["border_color"], highlightthickness=1)
+        map_panel.pack(side=tk.LEFT, fill="both", expand=True, padx=(0, 10))
+
+        self.canvas = tk.Canvas(map_panel, bg="#121212", highlightthickness=0)
+        self.canvas.pack(fill="both", expand=True)
+
+        try:
+            # Caricamento immagine satellitare. Deve trovarsi nella stessa cartella dello script.
+            cartella_corrente = os.path.dirname(os.path.abspath(__file__))
+            percorso_immagine = os.path.join(cartella_corrente, "mappa.png")
+            self.bg_img = tk.PhotoImage(file=percorso_immagine)
+            self.canvas.create_image(0, 0, anchor="nw", image=self.bg_img, tags="static_map")
+        except Exception as e:
+            self.canvas.create_text(400, 300, text="Mappa non trovata ('mappa.png')", font=("Consolas", 14, "bold"), fill=self.colors["accent_red"], tags="static_map")
+
+        # --- PANNELLO DASHBOARD (Destra) ---
+        dashboard_panel = tk.Frame(main_container, bg=self.colors["bg_app"], width=460)
+        dashboard_panel.pack(side=tk.RIGHT, fill="y")
+        dashboard_panel.pack_propagate(False) 
+
+        tk.Label(dashboard_panel, text="MONITORAGGIO ZONE IN TEMPO REALE", font=("Segoe UI", 14, "bold"), bg=self.colors["bg_app"], fg=self.colors["text_secondary"]).pack(pady=(0, 10), anchor="w")
 
         self.zone_widgets = {}
 
+        # Generazione automatica dei pannelli laterali basata sulla lista zone del Model
         for zone in self.zones:
-            # Card Frame
-            card = tk.LabelFrame(
-                container,
-                text=f" {zone.name} ",
-                font=("Arial", 12, "bold"),
-                bg="white",
-                fg="#34495e",
-                bd=1,
-                relief="solid",
-                padx=15,
-                pady=15,
-            )
-            card.pack(side=tk.LEFT, fill="both", expand=True, padx=10)
+            card = ttk.LabelFrame(dashboard_panel, text=f" {zone.name.upper()} ", style="Card.TLabelframe", padding=12)
+            card.pack(fill="x", pady=5)
 
-            # Info Stato
-            lbl_status = tk.Label(
-                card,
-                text="Inizializzazione...",
-                font=("Arial", 11, "bold"),
-                bg="white",
-                anchor="w",
-            )
-            lbl_status.pack(fill="x", pady=(5, 5))
+            info_frame = tk.Frame(card, bg=self.colors["bg_panel"])
+            info_frame.pack(fill="x", pady=(0, 5))
 
-            # Progress Bar
-            progress = ttk.Progressbar(
-                card, orient="horizontal", length=100, mode="determinate"
-            )
-            progress.pack(fill="x", pady=10)
+            lbl_status = tk.Label(info_frame, text="Scansione...", font=("Segoe UI", 11, "bold"), bg=self.colors["bg_panel"], fg=self.colors["text_primary"], anchor="w")
+            lbl_status.pack(fill="x")
+            
+            progress = ttk.Progressbar(info_frame, orient="horizontal", length=100, mode="determinate", style="Green.Horizontal.TProgressbar")
+            progress.pack(fill="x", pady=6)
+            
+            lbl_details = tk.Label(info_frame, text="--/--", font=("Consolas", 11), bg=self.colors["bg_panel"], fg=self.colors["text_primary"], anchor="e")
+            lbl_details.pack(fill="x")
 
-            # Dettagli numerici
-            lbl_details = tk.Label(
-                card, text="--/--", font=("Consolas", 10), bg="white", fg="#7f8c8d"
-            )
-            lbl_details.pack(anchor="e")
+            action_frame = tk.Frame(card, bg=self.colors["bg_panel"])
+            action_frame.pack(fill="x", pady=(4,0))
 
-            # Coda (Evidenziata)
-            lbl_queue = tk.Label(
-                card,
-                text="Coda: 0",
-                font=("Arial", 11, "bold"),
-                bg="white",
-                fg="#e67e22",
-            )
-            lbl_queue.pack(anchor="e", pady=5)
+            lbl_queue = tk.Label(action_frame, text="Coda: 0", font=("Segoe UI", 10, "bold"), bg=self.colors["bg_panel"], fg=self.colors["accent_orange"], anchor="w")
+            lbl_queue.pack(side=tk.LEFT)
+            
+            btn_park = tk.Button(action_frame, text="PARCHEGGIA", bg=self.colors["accent_green"], fg="#121212", font=("Segoe UI", 9, "bold"), 
+                                 relief="flat", bd=0, padx=12, pady=5, cursor="hand2", activebackground="#00C853",
+                                 command=lambda z=zone: self.user_action(z, "park"))
+            btn_park.pack(side=tk.RIGHT, padx=5)
 
-            # Pulsanti di Azione
-            btn_frame = tk.Frame(card, bg="white")
-            btn_frame.pack(side="bottom", fill="x", pady=10)
+            btn_unpark = tk.Button(action_frame, text="ESCI", bg=self.colors["accent_red"], fg="white", font=("Segoe UI", 9, "bold"), 
+                                   relief="flat", bd=0, padx=12, pady=5, cursor="hand2", activebackground="#DC2626",
+                                   state=tk.DISABLED, command=lambda z=zone: self.user_action(z, "unpark"))
+            btn_unpark.pack(side=tk.RIGHT)
 
-            btn_park = tk.Button(
-                btn_frame,
-                text="PARK (+1)",
-                bg=self.colors["success"],
-                fg="white",
-                font=("Arial", 9, "bold"),
-                relief="flat",
-                cursor="hand2",
-                command=lambda z=zone: self.manual_action(z, "park"),
-            )
-            btn_park.pack(side=tk.LEFT, fill="x", expand=True, padx=2)
-
-            btn_unpark = tk.Button(
-                btn_frame,
-                text="UNPARK (-1)",
-                bg=self.colors["danger"],
-                fg="white",
-                font=("Arial", 9, "bold"),
-                relief="flat",
-                cursor="hand2",
-                command=lambda z=zone: self.manual_action(z, "unpark"),
-            )
-            btn_unpark.pack(side=tk.LEFT, fill="x", expand=True, padx=2)
-
-            # Salvataggio riferimenti
+            # Conserviamo i riferimenti ai widget per poterli aggiornare dinamicamente nel loop
             self.zone_widgets[zone.name] = {
-                "progress": progress,
                 "lbl_status": lbl_status,
+                "progress": progress,
                 "lbl_details": lbl_details,
                 "lbl_queue": lbl_queue,
+                "btn_park": btn_park,
+                "btn_unpark": btn_unpark
             }
 
-    def create_log_area(self):
-        # Area di log scorrevole
-        log_frame = tk.LabelFrame(
-            self,
-            text="System Logs",
-            bg=self.colors["bg"],
-            font=("Segoe UI", 10, "bold"),
-        )
-        log_frame.pack(fill="both", expand=True, padx=20, pady=(0, 20))
+        # Terminale di Log in basso a destra
+        tk.Label(dashboard_panel, text="REGISTRO EVENTI DI SISTEMA", font=("Segoe UI", 11, "bold"), bg=self.colors["bg_app"], fg=self.colors["text_secondary"]).pack(pady=(15, 5), anchor="w")
+        
+        log_container = tk.Frame(dashboard_panel, bd=1, bg=self.colors["border_color"], relief="solid")
+        log_container.pack(fill="both", expand=True)
 
-        self.log_area = scrolledtext.ScrolledText(
-            log_frame, height=8, state="disabled", font=("Consolas", 9)
-        )
-        self.log_area.pack(fill="both", expand=True, padx=5, pady=5)
+        self.log_area = scrolledtext.ScrolledText(log_container, bg=self.colors["log_bg"], fg=self.colors["text_secondary"], font=("Consolas", 10), bd=0, padx=10, pady=10)
+        self.log_area.pack(fill="both", expand=True)
 
-        # Tag colori
-        self.log_area.tag_config("INFO", foreground="black")
-        self.log_area.tag_config("SUCCESS", foreground=self.colors["success"])
-        self.log_area.tag_config("WARNING", foreground=self.colors["warning"])
-        self.log_area.tag_config("ERROR", foreground=self.colors["danger"])
+        # Mappatura dei colori per i tag nel log
+        self.log_area.tag_config("log_in", foreground=self.colors["log_in"])      
+        self.log_area.tag_config("log_out", foreground=self.colors["log_out"])     
+        self.log_area.tag_config("user", foreground=self.colors["accent_cyan"], font=("Consolas", 10, "bold")) 
+        self.log_area.tag_config("alert", foreground=self.colors["accent_orange"], font=("Consolas", 10, "bold")) 
 
-    def log_msg(self, msg, level="INFO"):
-        # Scrive nel log in modo thread-safe
+    def log_msg(self, type_tag, zone_name, action_desc, color_tag):
+        """Scrive un messaggio formattato nel terminale HUD dell'interfaccia."""
         def _write():
             self.log_area.config(state="normal")
-            timestamp = time.strftime("%H:%M:%S")
-            self.log_area.insert(tk.END, f"[{timestamp}] {msg}\n", level)
+            timestamp = datetime.now().strftime('%H:%M:%S')
+            # ljust assicura l'allineamento perfetto delle colonne nel log
+            formatted_msg = f"[{timestamp}] [{type_tag.ljust(8)}] {zone_name.ljust(7)} | {action_desc}\n"
+            self.log_area.insert(tk.END, formatted_msg, color_tag)
             self.log_area.see(tk.END)
             self.log_area.config(state="disabled")
-
         self.after(0, _write)
 
-    # ==================== LOGICA & WORKERS ====================
-
-    def _zone_worker(self, zone):
-        # Simulazione traffico in background
-        while self.running:
-            time.sleep(random.uniform(2.0, 5.0))
-            if not self.running:
-                break
-
-            # Genera eventi casuali (park/unpark)
-            evento = random.randint(0, 100)
-            if evento < 40:
-                if zone.park():
-                    self.log_msg(f"AUTO-PARK: Auto entrata in {zone.name}", "INFO")
-                else:
-                    self.log_msg(f"AUTO-PARK: {zone.name} PIENA -> Coda", "WARNING")
-            elif 40 <= evento < 80:
-                if zone.unpark():
-                    self.log_msg(f"AUTO-UNPARK: Auto uscita da {zone.name}", "INFO")
-
-    def manual_action(self, zone, action):
-        # Gestione pulsanti manuali
+    def user_action(self, zone, action):
+        """Gestisce il click dei bottoni da parte dell'utente reale."""
+        nome_breve = zone.name.split("(")[0].strip().upper()
         if action == "park":
             if zone.park():
-                self.log_msg(f"MANUALE: Park in {zone.name}", "SUCCESS")
+                self.user_parked_zone = zone.name
+                self.log_msg("UTENTE", nome_breve, "Parcheggio assegnato con successo", "user")
             else:
-                self.log_msg(f"MANUALE: Coda in {zone.name}", "WARNING")
+                self.log_msg("ALLERTA", nome_breve, "Accesso negato, capacità massima", "alert")
+                
         elif action == "unpark":
             if zone.unpark():
-                self.log_msg(f"MANUALE: Unpark da {zone.name}", "SUCCESS")
+                self.user_parked_zone = None
+                self.log_msg("UTENTE", nome_breve, "Veicolo rimosso dal sistema", "user")
             else:
-                self.log_msg(f"MANUALE: Errore {zone.name} vuota", "ERROR")
+                 self.log_msg("ERRORE", nome_breve, "Anomalia durante l'uscita", "alert")
 
-        # Aggiornamento immediato (senza aspettare il loop)
         self.update_widgets_once()
 
+    def _zone_worker(self, zone):
+        """Thread worker autonomo: simula ingressi e uscite automatiche di veicoli."""
+        nome_breve = zone.name.split("(")[0].strip().upper()
+        while self.running:
+            time.sleep(random.uniform(3.5, 8.0)) 
+            if not self.running: break
+            
+            _, prob_park = self.get_time_phase()
+            evento = random.randint(0, 100)
+            
+            if evento < prob_park:
+                if zone.park(): 
+                    self.log_msg("INGRESSO", nome_breve, "Rilevato ingresso veicolo", "log_in")
+            else:
+                with zone.lock:
+                    # Garantiamo che non svuoti il posto occupato dall'utente
+                    occupied_by_others = zone.occupied_slots - (1 if self.user_parked_zone == zone.name else 0)
+                
+                if occupied_by_others > 0:
+                    if zone.unpark():
+                        self.log_msg("USCITA", nome_breve, "Rilevata uscita veicolo", "log_out")
+
     def start_background_workers(self):
+        """Avvia un thread parallelo per ogni zona di parcheggio caricata."""
         for zone in self.zones:
-            t = threading.Thread(target=self._zone_worker, args=(zone,), daemon=True)
-            t.start()
+            threading.Thread(target=self._zone_worker, args=(zone,), daemon=True).start()
 
     def update_ui_loop(self):
-        # Polling loop per aggiornare la grafica
+        """Ciclo di refresh dell'interfaccia grafica gestito da Tkinter."""
         if self.running:
             self.update_widgets_once()
-            self.after(200, self.update_ui_loop)
+            
+            ora_attuale = datetime.now().strftime("%H:%M:%S")
+            self.clock_label.config(text=ora_attuale)
+
+            fase_attuale, _ = self.get_time_phase()
+            self.phase_label.config(text=f"[ {fase_attuale.upper()} ]")
+            
+            # Richiamiamo questa funzione ogni 500ms
+            self.after(500, self.update_ui_loop)
 
     def update_widgets_once(self):
-        # Logica di aggiornamento singolo widget
+        """Ridisegna gli indicatori HUD sulla mappa e aggiorna i dati numerici nella Sidebar."""
+        # Pulisce tutti gli elementi mobili vecchi per evitare sovrapposizioni
+        self.canvas.delete("dynamic") 
+
         for zone in self.zones:
             widgets = self.zone_widgets[zone.name]
-
+            # Estraiamo i dati atomici con il lock per coerenza multithreading
             with zone.lock:
-                occ = zone.occupied_slots
-                cap = zone.capacity
-                wait = zone.waiting
-                rate = zone.occupancy_rate
-                free = zone.free_slots
+                occ, cap, wait, free, rate = zone.occupied_slots, zone.capacity, zone.waiting, zone.free_slots, zone.occupancy_rate
 
-            # Progress Bar
-            widgets["progress"]["value"] = rate
-            widgets["progress"]["maximum"] = 100
-
-            if rate > 90:
-                widgets["progress"].configure(style="Red.Horizontal.TProgressbar")
-                status_txt = "● PIENO"  # Pallino rosso simulato
-                fg_col = self.colors["danger"]
-            elif rate > 70:
-                widgets["progress"].configure(style="Orange.Horizontal.TProgressbar")
-                status_txt = "● AFFOLLATO"  # Pallino arancione simulato
-                fg_col = "#e67e22"
+            # Calcolo colori dinamici basati sulla percentuale di riempimento
+            if rate >= 100:
+                status_txt, status_col, prog_style = "STATO: PIENO", self.colors["accent_red"], "Red.Horizontal.TProgressbar"
+            elif rate >= 60:  
+                status_txt, status_col, prog_style = "STATO: AFFOLLATO", self.colors["accent_orange"], "Orange.Horizontal.TProgressbar"
             else:
-                widgets["progress"].configure(style="Green.Horizontal.TProgressbar")
-                status_txt = "● DISPONIBILE"  # Pallino verde simulato
-                fg_col = self.colors["success"]
+                status_txt, status_col, prog_style = "STATO: DISPONIBILE", self.colors["accent_green"], "Green.Horizontal.TProgressbar"
+            
+            widgets["lbl_status"].config(text=status_txt, fg=status_col)
+            widgets["progress"].config(value=rate, style=prog_style)
+            widgets["lbl_details"].config(text=f"Occupati: {occ}/{cap}  |  Liberi: {free}")
 
-            # Label
-            widgets["lbl_status"].config(text=status_txt, fg=fg_col)
-            widgets["lbl_details"].config(text=f"{occ}/{cap} Occ. | {free} Lib.")
+            widgets["lbl_queue"].config(text=f"In Coda: {wait}" if wait > 0 else "Nessuna coda", 
+                                        fg=self.colors["accent_orange"] if wait > 0 else self.colors["text_secondary"])
 
-            if wait > 0:
-                widgets["lbl_queue"].config(
-                    text=f"⚠ Coda: {wait}", fg=self.colors["danger"]
-                )
+            # Logica dei bottoni: se parcheggiato in una zona, blocca gli altri bottoni park
+            is_user_here = (self.user_parked_zone == zone.name)
+            if self.user_parked_zone is None:
+                widgets["btn_park"].config(state=tk.NORMAL, bg=self.colors["accent_green"], fg="#121212")
+                widgets["btn_unpark"].config(state=tk.DISABLED, bg=self.colors["btn_disabled"])
             else:
-                widgets["lbl_queue"].config(text="Nessuna Coda", fg="#bdc3c7")
+                widgets["btn_park"].config(state=tk.DISABLED, bg=self.colors["btn_disabled"])
+                widgets["btn_unpark"].config(state=tk.NORMAL if is_user_here else tk.DISABLED, bg=self.colors["accent_red"] if is_user_here else self.colors["btn_disabled"])
+
+            # --- DISEGNO BADGE HUD SULLA MAPPA ---
+            x, y = self.map_coords.get(zone.name, (0, 0))
+            nome_breve = zone.name.split("(")[0].strip().upper()
+            
+            # Se l'utente è parcheggiato qui, il badge diventa Ciano
+            pin_color = self.colors["accent_cyan"] if is_user_here else status_col
+            
+            # Rettangolo principale con numero posti liberi
+            self.canvas.create_rectangle(x-35, y-25, x+35, y+25, fill=self.colors["bg_app"], outline=pin_color, width=2, tags="dynamic")
+            self.canvas.create_text(x, y, text=f"{free}", font=("Consolas", 20, "bold"), fill=pin_color, tags="dynamic")
+            
+            # Etichetta con nome della zona sotto il badge
+            self.canvas.create_rectangle(x-35, y+25, x+35, y+45, fill=pin_color, outline=pin_color, tags="dynamic")
+            self.canvas.create_text(x, y+35, text=nome_breve, font=("Segoe UI", 8, "bold"), fill=self.colors["bg_app"], tags="dynamic")
+
+            # Etichetta extra per evidenziare la posizione dell'utente
+            if is_user_here:
+                self.canvas.create_rectangle(x-45, y-50, x+45, y-30, fill=self.colors["bg_app"], outline=pin_color, width=1, tags="dynamic")
+                self.canvas.create_text(x, y-40, text="LA TUA AUTO", font=("Segoe UI", 8, "bold"), fill=pin_color, tags="dynamic")
 
     def on_close(self):
-        if messagebox.askokcancel("Esci", "Vuoi davvero chiudere UniPark?"):
+        """Gestisce lo spegnimento sicuro dei thread prima di chiudere la finestra."""
+        if messagebox.askokcancel("Esci", "Vuoi chiudere UniPark Control Center?"):
             self.running = False
             self.destroy()
-
+            # os._exit(0) uccide immediatamente tutti i thread orfani in background
+            os._exit(0)
 
 if __name__ == "__main__":
     app = UniParkApp()

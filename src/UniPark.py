@@ -6,30 +6,33 @@ from threading import Lock
 
 # ==================== MODELLO DATI (MODEL) ====================
 
-
 class ParkingZone:
-    # Modello che gestisce i dati del singolo parcheggio in modo Thread-Safe
+    """Classe che modella lo stato di un singolo parcheggio fisico.
+    Utilizza un oggetto Lock() per prevenire la 'race condition': evita che 
+    due thread (quello della simulazione e quello utente) modifichino 
+    i posti disponibili nello stesso millisecondo causando errori.
+    """
 
     def __init__(self, name, capacity, free_slots):
-        # Implementa un meccanismo di locking per garantire l'accesso thread-safe agli attributi condivisi (free_slots, waiting)
         self.name = name
         self.capacity = capacity
+        # Garantiamo che i posti liberi non siano mai negativi o superiori alla capienza totale
         self.free_slots = max(0, min(free_slots, capacity))
         self.waiting = 0
         self.lock = Lock()
 
-    @property  # Calcolo dinamico per garantire la coerenza dei dati senza ridondanza di stato
+    @property 
     def occupied_slots(self):
-        # Calcola i posti occupati
+        """Calculo dinamico dei posti occupati deducendoli da quelli liberi."""
         return self.capacity - self.free_slots
 
-    @property  # Percentuale di saturazione rispetto alla capacità totale
+    @property 
     def occupancy_rate(self):
-        # Calcola la percentuale di occupazione
+        """Restituisce la percentuale di riempimento attuale."""
         return (self.occupied_slots / self.capacity) * 100
 
     def park(self):
-        # Tenta l'ingresso: se pieno, incrementa la coda di attesa
+        """Logica di ingresso: sottrae uno slot se libero, altrimenti mette in coda."""
         with self.lock:
             if self.free_slots > 0:
                 self.free_slots -= 1
@@ -38,7 +41,7 @@ class ParkingZone:
             return False
 
     def unpark(self):
-        # Gestisce l'uscita: se c'è attesa, libera un utente in coda, altrimenti libera un posto
+        """Logica di uscita: se c'è coda entra il primo in attesa, altrimenti libera un posto."""
         with self.lock:
             if self.waiting > 0:
                 self.waiting -= 1
@@ -49,9 +52,7 @@ class ParkingZone:
             return False
 
     def get_status_dict(self):
-        # Restituisce un dizionario con lo stato attuale
-        # Necessario per i test unitari
-
+        """Espone lo stato della zona in un formato dizionario per facilitare i test automatici."""
         with self.lock:
             return {
                 "name": self.name,
@@ -62,32 +63,29 @@ class ParkingZone:
                 "rate": self.occupancy_rate,
             }
 
-
 # ==================== SISTEMA CENTRALE (CONTROLLER) ====================
 
-
 class UniParkSystem:
-    # Controller del sistema e gestisce l'inizializzazione delle zone
-    # Questa classe è fondamentale per i test e per inizializzare la GUI
+    """Orchestratore principale che gestisce l'insieme dei parcheggi dell'Università."""
 
     def __init__(self):
-        # Inizializzazione dei dati simulati (random) per le zone di parcheggio
+        # Inizializziamo le tre zone previste dal progetto
         self.zones = [
             ParkingZone("Zona A (Viale A. Doria)", 60, random.randint(20, 60)),
             ParkingZone("Zona B (DMI)", 45, random.randint(15, 45)),
             ParkingZone("Zona C (Via S. Sofia)", 80, random.randint(30, 80)),
         ]
 
-        # Mapping rapido per l'accesso tramite identificativo testuale
+        # Creiamo una mappa rapida (ID -> Oggetto) per accesso veloce
         self.zone_map = {"a": self.zones[0], "b": self.zones[1], "c": self.zones[2]}
         self.running = True
 
     def get_total_capacity(self):
-        # Restituisce la capacità totale di tutto il sistema
+        """Calcola la capienza totale di tutte le zone sommate."""
         return sum(z.capacity for z in self.zones)
 
     def get_zone_by_name(self, name):
-        # Recupera una zona specifica tramite il suo nome identificativo
+        """Cerca una zona specifica scorrendo la lista."""
         for zone in self.zones:
             if zone.name == name:
                 return zone
