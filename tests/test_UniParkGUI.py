@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 # Importiamo la classe GUI
-from UniparkGUI import UniParkApp
+from UniparkGUI import UniParkApp # pylint: disable=import-error
 
 
 @pytest.fixture

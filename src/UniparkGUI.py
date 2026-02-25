@@ -83,14 +83,14 @@ class UniParkApp(tk.Tk):
         """Calcola la fase attuale basata sull'orologio di sistema e imposta la probabilità di sosta."""
         hour = datetime.now().hour
         if 8 <= hour < 14:
-            return "PICCO MATTUTINO", 85  # Molte auto in entrata
-        elif 14 <= hour < 16:
-            return "TRAFFICO POMERIDIANO", 55  # Situazione stabile
-        elif 16 <= hour < 19:
-            return "DEFLUSSO POMERIDIANO", 25  # Le auto iniziano a uscire
-        elif 19 <= hour < 22:
-            return "SVUOTAMENTO SERALE", 10  # Parcheggi quasi deserti
-            return "FASCIA NOTTURNA", 2  # Nessuna attività
+            return "PICCO MATTUTINO", 85
+        if 14 <= hour < 16:
+            return "TRAFFICO POMERIDIANO", 55
+        if 16 <= hour < 19:
+            return "DEFLUSSO POMERIDIANO", 25
+        if 19 <= hour < 22:
+            return "SVUOTAMENTO SERALE", 10
+        return "FASCIA NOTTURNA", 2
 
     def set_theme_colors(self):
         """Palette colori centrale dell'applicazione per facilitare future modifiche al tema."""
@@ -224,16 +224,8 @@ class UniParkApp(tk.Tk):
             self.canvas.create_image(
                 0, 0, anchor="nw", image=self.bg_img, tags="static_map"
             )
-        except Exception as e:
-            # pylint: disable=broad-exception-caught
-            self.canvas.create_text(
-                400,
-                300,
-                text="Mappa non trovata ('mappa.png')",
-                font=("Consolas", 14, "bold"),
-                fill=self.colors["accent_red"],
-                tags="static_map",
-            )
+        except Exception:  # pylint: disable=broad-exception-caught
+            self.canvas.create_text(400, 300, text="Mappa non trovata ('mappa.png')", font=("Consolas", 14, "bold"), fill=self.colors["accent_red"], tags="static_map")
 
         # --- PANNELLO DASHBOARD (Destra) ---
         dashboard_panel = tk.Frame(main_container, bg=self.colors["bg_app"], width=460)
