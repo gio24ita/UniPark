@@ -1,8 +1,12 @@
-# 🅿️ UniPark — Simulazione e Gestione Parcheggi Universitari
+# UniPark — Simulazione e Gestione Parcheggi Universitari
 
 > Software dimostrativo per la simulazione in tempo reale della gestione dei parcheggi della Cittadella Universitaria di Catania.
 
 ---
+
+![Anteprima UniPark Control Center](assets/screenshot.png)
+
+*L'interfaccia principale di monitoraggio con mappa satellitare interattiva, indicatori HUD in tempo reale e log degli eventi di sistema.*
 
 ##  Descrizione
 
@@ -16,6 +20,8 @@ Il progetto non è collegato a sensori reali: il flusso di auto viene generato a
 
 ```
 UniPark/
+├── assets/
+│   ├── screenshot.png      # Anteprima del layout del programma
 ├── src/
 │   ├── UniPark.py          # Logica core: Model (ParkingZone) + Controller (UniParkSystem)
 │   └── UniparkGUI.py       # Interfaccia grafica Tkinter (Dashboard)
