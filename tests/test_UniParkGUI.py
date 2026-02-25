@@ -1,5 +1,6 @@
 # pylint: disable=redefined-outer-name
 from unittest.mock import MagicMock, patch
+
 import pytest
 
 # Importiamo la classe GUI
@@ -21,11 +22,11 @@ def mock_app():
         # Qui abbiamo aggiunto maxsize, minsize, Canvas e PhotoImage!
         with patch("tkinter.Tk.geometry"), patch("tkinter.Tk.title"), patch(
             "tkinter.Tk.configure"
-        ), patch("tkinter.Tk.resizable"), patch(
-            "tkinter.Tk.maxsize"          
+        ), patch("tkinter.Tk.resizable"), patch("tkinter.Tk.maxsize"), patch(
+            "tkinter.Tk.minsize"
         ), patch(
-            "tkinter.Tk.minsize"          
-        ), patch("tkinter.Tk.protocol"), patch(
+            "tkinter.Tk.protocol"
+        ), patch(
             "tkinter.Tk.destroy"
         ), patch(
             "tkinter.Tk.mainloop"
@@ -89,7 +90,7 @@ def mock_app():
                 app.running = False
                 app.system = mock_system
                 app.zones = mock_system.zones
-                app.canvas = MagicMock() # Mock the canvas to avoid draw errors
+                app.canvas = MagicMock()  # Mock the canvas to avoid draw errors
 
                 # Manually populate fake widgets
                 app.zone_widgets = {
@@ -99,7 +100,7 @@ def mock_app():
                         "lbl_details": MagicMock(),
                         "lbl_queue": MagicMock(),
                         "btn_park": MagicMock(),
-                        "btn_unpark": MagicMock()
+                        "btn_unpark": MagicMock(),
                     }
                 }
 
@@ -118,7 +119,7 @@ def test_gui_initialization(mock_app):
 def test_gui_user_park(mock_app):
     """Test clicking the PARK button."""
     app, mock_zone = mock_app
-    
+
     # NOTA: Ora si chiama user_action (non più manual_action)
     app.user_action(mock_zone, "park")
 
@@ -130,7 +131,7 @@ def test_gui_user_park(mock_app):
 def test_gui_user_unpark(mock_app):
     """Test clicking the UNPARK button."""
     app, mock_zone = mock_app
-    
+
     # NOTA: Ora si chiama user_action
     app.user_action(mock_zone, "unpark")
 

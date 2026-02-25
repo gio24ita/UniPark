@@ -25,6 +25,7 @@ except ImportError:
 
 
 class UniParkApp(tk.Tk):
+    # pylint: disable=too-many-instance-attributes
     def __init__(self):
         super().__init__()
 
@@ -89,7 +90,6 @@ class UniParkApp(tk.Tk):
             return "DEFLUSSO POMERIDIANO", 25  # Le auto iniziano a uscire
         elif 19 <= hour < 22:
             return "SVUOTAMENTO SERALE", 10  # Parcheggi quasi deserti
-        else:
             return "FASCIA NOTTURNA", 2  # Nessuna attività
 
     def set_theme_colors(self):
@@ -225,6 +225,7 @@ class UniParkApp(tk.Tk):
                 0, 0, anchor="nw", image=self.bg_img, tags="static_map"
             )
         except Exception as e:
+            # pylint: disable=broad-exception-caught
             self.canvas.create_text(
                 400,
                 300,
@@ -620,7 +621,7 @@ class UniParkApp(tk.Tk):
             self.running = False
             self.destroy()
             # os._exit(0) uccide immediatamente tutti i thread orfani in background
-            os._exit(0)
+            os._exit(0)  # pylint: disable=protected-access
 
 
 if __name__ == "__main__":
