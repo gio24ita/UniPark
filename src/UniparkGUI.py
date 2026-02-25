@@ -15,7 +15,7 @@ from tkinter import messagebox, scrolledtext, ttk
 
 # Importiamo il core logico. Se UniPark.py non esiste, l'app si chiude con un errore.
 try:
-    from UniPark import UniParkSystem
+    from UniPark import UniParkSystem # type: ignore
 except ImportError:
     messagebox.showerror(
         "Errore",
