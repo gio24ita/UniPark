@@ -1,8 +1,12 @@
-# 🅿️ UniPark — Simulazione e Gestione Parcheggi Universitari
+# UniPark — Simulazione e Gestione Parcheggi Universitari
 
 > Software dimostrativo per la simulazione in tempo reale della gestione dei parcheggi della Cittadella Universitaria di Catania.
 
 ---
+
+![Anteprima UniPark Control Center](assets/screenshot.jpg)
+
+*L'interfaccia principale di monitoraggio con mappa satellitare interattiva, indicatori HUD in tempo reale e log degli eventi di sistema.*
 
 ##  Descrizione
 
