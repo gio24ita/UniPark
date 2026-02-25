@@ -15,7 +15,7 @@ from tkinter import messagebox, scrolledtext, ttk
 
 # Importiamo il core logico. Se UniPark.py non esiste, l'app si chiude con un errore.
 try:
-    from UniPark import UniParkSystem # type: ignore
+    from UniPark import UniParkSystem  # type: ignore
 except ImportError:
     messagebox.showerror(
         "Errore",
@@ -225,7 +225,14 @@ class UniParkApp(tk.Tk):
                 0, 0, anchor="nw", image=self.bg_img, tags="static_map"
             )
         except Exception:  # pylint: disable=broad-exception-caught
-            self.canvas.create_text(400, 300, text="Mappa non trovata ('mappa.png')", font=("Consolas", 14, "bold"), fill=self.colors["accent_red"], tags="static_map")
+            self.canvas.create_text(
+                400,
+                300,
+                text="Mappa non trovata ('mappa.png')",
+                font=("Consolas", 14, "bold"),
+                fill=self.colors["accent_red"],
+                tags="static_map",
+            )
 
         # --- PANNELLO DASHBOARD (Destra) ---
         dashboard_panel = tk.Frame(main_container, bg=self.colors["bg_app"], width=460)
