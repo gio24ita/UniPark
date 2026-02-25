@@ -6,10 +6,11 @@ from threading import Lock
 
 # ==================== MODELLO DATI (MODEL) ====================
 
+
 class ParkingZone:
     """Classe che modella lo stato di un singolo parcheggio fisico.
-    Utilizza un oggetto Lock() per prevenire la 'race condition': evita che 
-    due thread (quello della simulazione e quello utente) modifichino 
+    Utilizza un oggetto Lock() per prevenire la 'race condition': evita che
+    due thread (quello della simulazione e quello utente) modifichino
     i posti disponibili nello stesso millisecondo causando errori.
     """
 
@@ -21,12 +22,12 @@ class ParkingZone:
         self.waiting = 0
         self.lock = Lock()
 
-    @property 
+    @property
     def occupied_slots(self):
         """Calculo dinamico dei posti occupati deducendoli da quelli liberi."""
         return self.capacity - self.free_slots
 
-    @property 
+    @property
     def occupancy_rate(self):
         """Restituisce la percentuale di riempimento attuale."""
         return (self.occupied_slots / self.capacity) * 100
@@ -63,7 +64,9 @@ class ParkingZone:
                 "rate": self.occupancy_rate,
             }
 
+
 # ==================== SISTEMA CENTRALE (CONTROLLER) ====================
+
 
 class UniParkSystem:
     """Orchestratore principale che gestisce l'insieme dei parcheggi dell'Università."""
